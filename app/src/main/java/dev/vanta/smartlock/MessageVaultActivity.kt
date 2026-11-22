@@ -40,7 +40,7 @@ class MessageVaultActivity : FragmentActivity() {
                     contract = ActivityResultContracts.OpenDocument()
                 ) { uri ->
                     if (uri != null) {
-                        val result = VoiceNoteStore.import(this, uri)
+                        val result = VoiceNoteStore.importAudio(this, uri)
                         importStatus = result.fold(
                             onSuccess = { "Imported: ${it.name}" },
                             onFailure = { "Import failed: ${it.message ?: "unsupported audio file"}" }
