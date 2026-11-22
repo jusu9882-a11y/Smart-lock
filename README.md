@@ -4,13 +4,15 @@
 
 VANTA is an Android security companion with Android's real biometric/device-credential prompt and an explicit Device Admin action to lock the phone. It is not a replacement for Android's lock screen.
 
-## Implemented in v0.3.0
+## Implemented in v0.4.0
 - AndroidX BiometricPrompt with device-credential fallback when supported.
 - Explicit Device Admin activation and **LOCK DEVICE NOW** using Android's `DevicePolicyManager.lockNow()`.
 - **WhatsApp Mode** using an Android `NotificationListenerService`.
 - Captures readable notification title/body previews from WhatsApp and WhatsApp Business only.
 - Stores up to 300 previews in VANTA's private app storage.
 - Screen to enable notification access and clear the WhatsApp archive.
+- User-selected audio import through Android's system document picker; imported audio is copied into VANTA's private app storage.
+- Basic playback and deletion controls for imported audio files; 50 MB per-file import limit.
 - No network permission, advertising, or analytics.
 
 ## WhatsApp Mode: capabilities and limits
@@ -19,7 +21,7 @@ VANTA is an Android security companion with Android's real biometric/device-cred
 - If previews are hidden, disabled, grouped without readable text, or withheld, VANTA cannot save unavailable message text.
 - If a message is deleted after its readable preview was captured, the saved preview may remain. This is not guaranteed for every notification.
 - VANTA cannot inspect WhatsApp's private chat database, bypass end-to-end encryption, or recover messages that were never captured.
-- Notification access does not provide actual voice-note audio files or other media. A separate user-authorized media/backup import workflow would be required; it is not implemented.
+- Notification access does not provide actual voice-note audio files or other media. VANTA now supports manually importing audio files that the user can already access through Android's system file picker. It does not automatically extract audio from WhatsApp or restore deleted media.
 - Clear the archive to remove any older entries captured by the previous all-app listener.
 
 ## Privacy and security
@@ -37,6 +39,6 @@ The project uses Android Gradle Plugin 8.7.3 and Java 17. GitHub Actions is conf
 - [ ] Install and test on the target Android phone
 - [ ] Confirm Notification Access opt-in and WhatsApp-only incoming preview capture
 - [ ] Test hidden-preview, grouped-notification, and deleted-after-capture behavior
-- [ ] Decide on a separate, user-authorized audio/media import workflow
+- [ ] Test user-authorized audio import and playback with common WhatsApp voice-note formats
 - [ ] Accessibility, reduced-motion, and lock/re-auth lifecycle testing
 - [ ] Explore approved Device Owner / dedicated-device deployment separately; factory reset must never be attempted without backup and explicit approval
