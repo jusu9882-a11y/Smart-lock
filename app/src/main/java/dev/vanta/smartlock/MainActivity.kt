@@ -5,7 +5,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
 import android.os.Build
-import android.security.keystore.KeyguardManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricManager
