@@ -3,6 +3,7 @@ package dev.vanta.smartlock
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import java.util.UUID
 
 class VantaNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -17,7 +18,7 @@ class VantaNotificationListener : NotificationListenerService() {
         if (title.isBlank() && body.isBlank()) return
 
         val appName = if (sbn.packageName == WHATSAPP_BUSINESS_PACKAGE) "WhatsApp Business" else "WhatsApp"
-        MessageVaultStore.save(applicationContext, VaultMessage(sbn.packageName, appName, title, body, sbn.postTime))
+        VaultStore.add(applicationContext, VaultMessage(UUID.randomUUID().toString(), sbn.postTime, title.ifBlank { appName }, body, "TEXT"))
     }
 
     companion object {
