@@ -30,7 +30,7 @@ class MessageVaultActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                var messages by remember { mutableStateOf(MessageVaultStore.read(this)) }
+                var messages by remember { mutableStateOf(VaultStore.load(this)) }
                 var voiceNotes by remember { mutableStateOf(VoiceNoteStore.list(this)) }
                 var importStatus by remember { mutableStateOf("Voice notes are imported only when you choose the files.") }
                 var player by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -71,7 +71,7 @@ class MessageVaultActivity : FragmentActivity() {
                     Text(importStatus, color = Color.Gray, fontSize = 11.sp)
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = {
-                        MessageVaultStore.clear(this@MessageVaultActivity)
+                        VaultStore.clear(this@MessageVaultActivity)
                         messages = emptyList()
                     }) { Text("CLEAR MESSAGE ARCHIVE") }
 
@@ -131,13 +131,13 @@ class MessageVaultActivity : FragmentActivity() {
                         Text("No previews captured yet. Enable notification access and receive a WhatsApp message with previews enabled.", color = Color.LightGray, fontSize = 12.sp)
                     } else {
                         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(messages, key = { "${it.receivedAt}-${it.packageName}-${it.title}-${it.body}" }) { item ->
+                            items(messages, key = { it.id }) { item ->
                                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF111923))) {
                                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                                        Text(item.title.ifBlank { item.app }, color = VaultCyan)
-                                        if (item.title.isNotBlank()) Text(item.app, color = Color.Gray, fontSize = 10.sp)
-                                        if (item.body.isNotBlank()) Text(item.body, color = Color.White)
-                                        Text(SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()).format(Date(item.receivedAt)),
+                                        Text(item.sender.ifBlank { "WhatsApp" }, color = VaultCyan)
+                                        if (item.kind.isNotBlank()) Text(item.kind, color = Color.Gray, fontSize = 10.sp)
+                                        if (item.content.isNotBlank()) Text(item.content, color = Color.White)
+                                        Text(SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()).format(Date(item.timestamp)),
                                             color = Color.Gray, fontSize = 10.sp)
                                     }
                                 }
