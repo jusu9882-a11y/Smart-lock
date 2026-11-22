@@ -49,8 +49,10 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = VoidBlack) {
                     VantaHome(
+                        authenticated = unlocked,
                         onAuthenticate = { showAuthenticationPrompt() },
                         onLockDevice = { lockDeviceNow() },
+                        onReLock = { unlocked = false },
                         deviceAdminActive = isDeviceAdminActive()
                     )
                 }
@@ -111,7 +113,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun VantaHome(onAuthenticate: () -> Unit, onLockDevice: () -> Unit, deviceAdminActive: Boolean) {
+private fun VantaHome(authenticated: Boolean, onAuthenticate: () -> Unit, onLockDevice: () -> Unit, onReLock: () -> Unit, deviceAdminActive: Boolean) {
     var time by remember { mutableStateOf("--:--") }
     var date by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("SYSTEM AUTHENTICATION READY") }
@@ -163,11 +165,11 @@ private fun VantaHome(onAuthenticate: () -> Unit, onLockDevice: () -> Unit, devi
             Spacer(Modifier.height(18.dp))
             Text(status, color = Cyan, fontSize = 12.sp, letterSpacing = 1.5.sp)
             Spacer(Modifier.height(18.dp))
-            Button(onClick = onAuthenticate) { Text("AUTHENTICATE") }
+            Button(onClick = if (authenticated) onReLock else onAuthenticate) { Text(if (authenticated) "LOCK VANTA" else "AUTHENTICATE") }
             Spacer(Modifier.height(8.dp))
             Button(onClick = onLockDevice) { Text(if (deviceAdminActive) "LOCK DEVICE NOW" else "ENABLE SYSTEM LOCK") }
             Spacer(Modifier.height(12.dp))
-            Text("Authentication opens Android's secure prompt.", color = Muted, fontSize = 10.sp)
+            Text(if (authenticated) "VANTA session unlocked on this screen." else "Authentication opens Android's secure prompt.", color = Muted, fontSize = 10.sp)
             Text("Device lock uses Android Device Administration.", color = Muted, fontSize = 10.sp)
         }
         Text("LOCAL ONLY  •  NO ADS  •  NO TELEMETRY", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
