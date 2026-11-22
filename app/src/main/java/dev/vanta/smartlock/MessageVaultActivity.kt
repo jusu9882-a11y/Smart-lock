@@ -1,8 +1,11 @@
 package dev.vanta.smartlock
 
+import android.media.MediaPlayer
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -28,23 +31,106 @@ class MessageVaultActivity : FragmentActivity() {
         setContent {
             MaterialTheme {
                 var messages by remember { mutableStateOf(MessageVaultStore.read(this)) }
+                var voiceNotes by remember { mutableStateOf(VoiceNoteStore.list(this)) }
+                var importStatus by remember { mutableStateOf("Voice notes are imported only when you choose the files.") }
+                var player by remember { mutableStateOf<MediaPlayer?>(null) }
+                var playingName by remember { mutableStateOf<String?>(null) }
+
+                val audioPicker = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    if (uri != null) {
+                        val result = VoiceNoteStore.import(this, uri)
+                        importStatus = result.fold(
+                            onSuccess = { "Imported: ${it.name}" },
+                            onFailure = { "Import failed: ${it.message ?: "unsupported audio file"}" }
+                        )
+                        voiceNotes = VoiceNoteStore.list(this)
+                    }
+                }
+
+                DisposableEffect(Unit) {
+                    onDispose {
+                        player?.release()
+                        player = null
+                    }
+                }
+
                 Column(Modifier.fillMaxSize().background(VaultBlack).padding(20.dp)) {
                     Text("VANTA / WHATSAPP MODE", color = VaultCyan, fontSize = 19.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text("Private archive of WhatsApp notification previews", color = Color.LightGray, fontSize = 12.sp)
+                    Text("Message previews and your selected voice-note files", color = Color.LightGray, fontSize = 12.sp)
                     Spacer(Modifier.height(16.dp))
                     Button(onClick = { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) {
                         Text("ENABLE NOTIFICATION ACCESS")
                     }
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { MessageVaultStore.clear(this@MessageVaultActivity); messages = emptyList() }) {
-                        Text("CLEAR WHATSAPP ARCHIVE")
+                    Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }) {
+                        Text("IMPORT WHATSAPP AUDIO")
                     }
-                    Spacer(Modifier.height(12.dp))
-                    if (messages.isEmpty()) {
-                        Text("No WhatsApp previews captured yet. Enable notification access, then receive a WhatsApp message with previews enabled.", color = Color.LightGray)
+                    Text(importStatus, color = Color.Gray, fontSize = 11.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {
+                        MessageVaultStore.clear(this@MessageVaultActivity)
+                        messages = emptyList()
+                    }) { Text("CLEAR MESSAGE ARCHIVE") }
+
+                    Spacer(Modifier.height(18.dp))
+                    Text("SAVED VOICE NOTES", color = VaultCyan, fontSize = 14.sp)
+                    if (voiceNotes.isEmpty()) {
+                        Text("No audio files imported. Choose an audio file from your device to add it here.", color = Color.LightGray, fontSize = 12.sp)
                     } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LazyColumn(Modifier.heightIn(max = 220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(voiceNotes, key = { it.name }) { note ->
+                                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF111923))) {
+                                    Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(note.name, color = Color.White, fontSize = 12.sp)
+                                            Text(note.sizeLabel, color = Color.Gray, fontSize = 10.sp)
+                                        }
+                                        TextButton(onClick = {
+                                            try {
+                                                player?.release()
+                                                player = MediaPlayer().apply {
+                                                    setDataSource(note.file.absolutePath)
+                                                    setOnCompletionListener {
+                                                        it.release()
+                                                        player = null
+                                                        playingName = null
+                                                    }
+                                                    prepare()
+                                                    start()
+                                                }
+                                                playingName = note.name
+                                                importStatus = "Playing: ${note.name}"
+                                            } catch (e: Exception) {
+                                                player?.release()
+                                                player = null
+                                                playingName = null
+                                                importStatus = "Could not play audio: ${e.message ?: "unsupported format"}"
+                                            }
+                                        }) { Text(if (playingName == note.name) "PLAYING" else "PLAY") }
+                                        TextButton(onClick = {
+                                            if (playingName == note.name) {
+                                                player?.release()
+                                                player = null
+                                                playingName = null
+                                            }
+                                            VoiceNoteStore.delete(note)
+                                            voiceNotes = VoiceNoteStore.list(this@MessageVaultActivity)
+                                        }) { Text("DELETE") }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+                    Text("SAVED WHATSAPP PREVIEWS", color = VaultCyan, fontSize = 14.sp)
+                    if (messages.isEmpty()) {
+                        Text("No previews captured yet. Enable notification access and receive a WhatsApp message with previews enabled.", color = Color.LightGray, fontSize = 12.sp)
+                    } else {
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             items(messages, key = { "${it.receivedAt}-${it.packageName}-${it.title}-${it.body}" }) { item ->
                                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF111923))) {
                                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -58,9 +144,8 @@ class MessageVaultActivity : FragmentActivity() {
                             }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Text("LIMITS: only notification text Android exposes after access is enabled can be saved. This does not read WhatsApp chats or recover earlier deleted messages. Voice-note audio files are not captured by notification access.",
-                        color = Color.Gray, fontSize = 11.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Audio import uses Android's file picker: you choose each file and VANTA copies it into private app storage. It does not extract audio from WhatsApp or bypass app security. Deleted audio can only be imported if you still have an accessible copy or backup.", color = Color.Gray, fontSize = 10.sp)
                 }
             }
         }
