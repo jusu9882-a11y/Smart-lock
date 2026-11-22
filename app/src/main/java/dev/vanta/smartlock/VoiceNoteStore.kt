@@ -3,7 +3,6 @@ package dev.vanta.smartlock
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Base64
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.io.File
@@ -55,15 +54,18 @@ object VoiceNoteStore {
                 init(Cipher.ENCRYPT_MODE, getKey())
             }
             input.use { source ->
-                CipherOutputStream(FileOutputStream(destination), cipher).use { output ->
-                    val buffer = ByteArray(8192)
-                    var total = 0L
-                    while (true) {
-                        val count = source.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        require(total <= MAX_BYTES) { "Audio file exceeds the 50 MB import limit." }
-                        output.write(buffer, 0, count)
+                FileOutputStream(destination).use { fileOutput ->
+                    fileOutput.write(cipher.iv)
+                    CipherOutputStream(fileOutput, cipher).use { output ->
+                        val buffer = ByteArray(8192)
+                        var total = 0L
+                        while (true) {
+                            val count = source.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= MAX_BYTES) { "Audio file exceeds the 50 MB import limit." }
+                            output.write(buffer, 0, count)
+                        }
                     }
                 }
             }
