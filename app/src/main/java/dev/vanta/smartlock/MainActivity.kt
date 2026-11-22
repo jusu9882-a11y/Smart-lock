@@ -5,7 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
 import android.os.Build
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -41,7 +41,7 @@ private val VoidBlack = Color(0xFF06090E)
 private val Cyan = Color(0xFF55D9FF)
 private val Muted = Color(0xFF8294AA)
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
