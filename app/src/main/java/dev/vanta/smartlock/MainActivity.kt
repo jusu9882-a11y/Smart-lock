@@ -113,6 +113,7 @@ class MainActivity : FragmentActivity() {
 
 @Composable
 private fun VantaHome(authenticated: Boolean, onAuthenticate: () -> Unit, onLockDevice: () -> Unit, onReLock: () -> Unit, deviceAdminActive: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var time by remember { mutableStateOf("--:--") }
     var date by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("SYSTEM AUTHENTICATION READY") }
@@ -167,6 +168,8 @@ private fun VantaHome(authenticated: Boolean, onAuthenticate: () -> Unit, onLock
             Button(onClick = if (authenticated) onReLock else onAuthenticate) { Text(if (authenticated) "LOCK VANTA" else "AUTHENTICATE") }
             Spacer(Modifier.height(8.dp))
             Button(onClick = onLockDevice) { Text(if (deviceAdminActive) "LOCK DEVICE NOW" else "ENABLE SYSTEM LOCK") }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { context.startActivity(android.content.Intent(context, MessageVaultActivity::class.java)) }) { Text("VOID MESSAGE VAULT") }
             Spacer(Modifier.height(12.dp))
             Text(if (authenticated) "VANTA session unlocked on this screen." else "Authentication opens Android's secure prompt.", color = Muted, fontSize = 10.sp)
             Text("Device lock uses Android Device Administration.", color = Muted, fontSize = 10.sp)
