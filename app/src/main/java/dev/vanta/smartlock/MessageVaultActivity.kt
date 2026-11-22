@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,6 +36,7 @@ class MessageVaultActivity : FragmentActivity() {
                 var importStatus by remember { mutableStateOf("Voice notes are imported only when you choose the files.") }
                 var player by remember { mutableStateOf<MediaPlayer?>(null) }
                 var playingName by remember { mutableStateOf<String?>(null) }
+                var playbackTemp by remember { mutableStateOf<File?>(null) }
 
                 val audioPicker = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.OpenDocument()
@@ -53,6 +55,8 @@ class MessageVaultActivity : FragmentActivity() {
                     onDispose {
                         player?.release()
                         player = null
+                        playbackTemp?.delete()
+                        playbackTemp = null
                     }
                 }
 
@@ -86,16 +90,21 @@ class MessageVaultActivity : FragmentActivity() {
                                     Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
                                             Text(note.name, color = Color.White, fontSize = 12.sp)
-                                            Text(note.sizeLabel, color = Color.Gray, fontSize = 10.sp)
+                                            Text(note.sizeLabel + if (note.encrypted) " · ENCRYPTED" else " · LEGACY FILE", color = Color.Gray, fontSize = 10.sp)
                                         }
                                         TextButton(onClick = {
                                             try {
                                                 player?.release()
+                                                playbackTemp?.delete()
+                                                val playableFile = VoiceNoteStore.prepareForPlayback(this@MessageVaultActivity, note)
+                                                playbackTemp = if (note.encrypted) playableFile else null
                                                 player = MediaPlayer().apply {
-                                                    setDataSource(note.file.absolutePath)
+                                                    setDataSource(playableFile.absolutePath)
                                                     setOnCompletionListener {
                                                         it.release()
                                                         player = null
+                                                        playbackTemp?.delete()
+                                                        playbackTemp = null
                                                         playingName = null
                                                     }
                                                     prepare()
@@ -106,6 +115,8 @@ class MessageVaultActivity : FragmentActivity() {
                                             } catch (e: Exception) {
                                                 player?.release()
                                                 player = null
+                                                playbackTemp?.delete()
+                                                playbackTemp = null
                                                 playingName = null
                                                 importStatus = "Could not play audio: ${e.message ?: "unsupported format"}"
                                             }
@@ -114,6 +125,8 @@ class MessageVaultActivity : FragmentActivity() {
                                             if (playingName == note.name) {
                                                 player?.release()
                                                 player = null
+                                                playbackTemp?.delete()
+                                                playbackTemp = null
                                                 playingName = null
                                             }
                                             VoiceNoteStore.delete(note)
