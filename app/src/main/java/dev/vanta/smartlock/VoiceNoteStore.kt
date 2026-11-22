@@ -23,7 +23,7 @@ object VoiceNoteStore {
             .map { VoiceNoteFile(it) }
     }
 
-    fun import(context: Context, uri: Uri): Result<File> = runCatching {
+    fun importAudio(context: Context, uri: Uri): Result<File> = runCatching {
         val mime = context.contentResolver.getType(uri).orEmpty()
         require(mime.startsWith("audio/")) { "Please select an audio file." }
 
