@@ -1,0 +1,3 @@
+<resources>
+    <string name="app_guard_accessibility_description">VANTA detects the foreground app package to protect apps you select. It does not read screen content.</string>
+</resources>
