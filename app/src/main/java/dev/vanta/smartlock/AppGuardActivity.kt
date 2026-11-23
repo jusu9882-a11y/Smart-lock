@@ -43,7 +43,7 @@ class AppGuardActivity : FragmentActivity() {
 
         setContent {
             val selected = remember {
-                mutableStateOf(AppGuardStore.protectedPackages(this).toSet())
+                mutableStateOf(AppGuardStore.protectedPackages(this@AppGuardActivity).toSet())
             }
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF06090E)) {
@@ -81,14 +81,14 @@ class AppGuardActivity : FragmentActivity() {
                         }
                         Button(
                             onClick = {
-                                AppGuardStore.setProtectedPackages(this, selected.value)
+                                AppGuardStore.setProtectedPackages(this@AppGuardActivity, selected.value)
                                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("SAVE & ENABLE APP GUARD") }
                         Button(
                             onClick = {
-                                AppGuardStore.setProtectedPackages(this, selected.value)
+                                AppGuardStore.setProtectedPackages(this@AppGuardActivity, selected.value)
                                 finish()
                             },
                             modifier = Modifier.fillMaxWidth()
