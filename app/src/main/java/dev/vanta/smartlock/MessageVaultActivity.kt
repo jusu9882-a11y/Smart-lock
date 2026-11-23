@@ -71,14 +71,18 @@ class MessageVaultActivity : FragmentActivity() {
                     }
                 }
                 LaunchedEffect(Unit) { authenticateVault() }
+                // Keep the lifecycle observer in sync with Compose state. A plain
+                // captured Boolean would remain at its initial value (false).
+                val latestVaultUnlocked by rememberUpdatedState(vaultUnlocked)
+                val latestAuthStatus = rememberUpdatedState<(String) -> Unit> { authStatus = it }
                 DisposableEffect(Unit) {
                     var backgrounded = false
                     val observer = LifecycleEventObserver { _, event ->
                         when (event) {
                             Lifecycle.Event.ON_STOP -> {
-                                if (vaultUnlocked) {
+                                if (latestVaultUnlocked) {
                                     vaultUnlocked = false
-                                    authStatus = "Vault relocked. Authenticate to continue."
+                                    latestAuthStatus.value("Vault relocked. Authenticate to continue.")
                                 }
                                 backgrounded = true
                             }
