@@ -7,6 +7,8 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -69,6 +71,29 @@ class MessageVaultActivity : FragmentActivity() {
                     }
                 }
                 LaunchedEffect(Unit) { authenticateVault() }
+                DisposableEffect(this, authenticateVault) {
+                    var backgrounded = false
+                    val observer = LifecycleEventObserver { _, event ->
+                        when (event) {
+                            Lifecycle.Event.ON_STOP -> {
+                                if (vaultUnlocked) {
+                                    vaultUnlocked = false
+                                    authStatus = "Vault relocked. Authenticate to continue."
+                                }
+                                backgrounded = true
+                            }
+                            Lifecycle.Event.ON_START -> {
+                                if (backgrounded) {
+                                    backgrounded = false
+                                    authenticateVault()
+                                }
+                            }
+                            else -> Unit
+                        }
+                    }
+                    lifecycle.addObserver(observer)
+                    onDispose { lifecycle.removeObserver(observer) }
+                }
                 if (!vaultUnlocked) {
                     Column(Modifier.fillMaxSize().background(VaultBlack).padding(24.dp), verticalArrangement = Arrangement.Center) {
                         Text("VANTA / VOID", color = VaultCyan, fontSize = 20.sp)
