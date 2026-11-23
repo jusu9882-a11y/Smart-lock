@@ -18,7 +18,18 @@ class VantaNotificationListener : NotificationListenerService() {
         if (title.isBlank() && body.isBlank()) return
 
         val appName = if (sbn.packageName == WHATSAPP_BUSINESS_PACKAGE) "WhatsApp Business" else "WhatsApp"
-        VaultStore.add(applicationContext, VaultMessage(UUID.randomUUID().toString(), sbn.postTime, title.ifBlank { appName }, body, "TEXT"))
+        val stableNotificationKey = "${sbn.packageName}:${sbn.key}"
+        VaultStore.add(
+            applicationContext,
+            VaultMessage(
+                UUID.randomUUID().toString(),
+                sbn.postTime,
+                title.ifBlank { appName },
+                body,
+                "TEXT",
+                stableNotificationKey
+            )
+        )
     }
 
     companion object {
