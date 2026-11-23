@@ -17,7 +17,8 @@ data class VaultMessage(
     val timestamp: Long,
     val sender: String,
     val content: String,
-    val kind: String
+    val kind: String,
+    val sourceKey: String = id
 )
 
 object VaultStore {
@@ -27,6 +28,9 @@ object VaultStore {
 
     @Synchronized fun add(context: Context, message: VaultMessage) {
         val all = load(context).toMutableList()
+        // A notification can be posted repeatedly as WhatsApp updates its preview.
+        // Keep one current entry per Android notification key.
+        all.removeAll { it.sourceKey == message.sourceKey }
         all.add(0, message)
         save(context, all.take(300))
     }
@@ -36,6 +40,7 @@ object VaultStore {
             ?: return emptyList()
         return try {
             val packed = Base64.decode(encoded, Base64.NO_WRAP)
+            require(packed.size > 12) { "Encrypted vault data is incomplete." }
             val iv = packed.copyOfRange(0, 12)
             val cipherText = packed.copyOfRange(12, packed.size)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -43,8 +48,15 @@ object VaultStore {
             val array = JSONArray(String(cipher.doFinal(cipherText), Charsets.UTF_8))
             (0 until array.length()).map { i ->
                 val item = array.getJSONObject(i)
-                VaultMessage(item.getString("id"), item.getLong("timestamp"),
-                    item.getString("sender"), item.getString("content"), item.getString("kind"))
+                val id = item.getString("id")
+                VaultMessage(
+                    id,
+                    item.getLong("timestamp"),
+                    item.getString("sender"),
+                    item.getString("content"),
+                    item.getString("kind"),
+                    item.optString("sourceKey", id)
+                )
             }
         } catch (_: Exception) { emptyList() }
     }
@@ -57,7 +69,8 @@ object VaultStore {
         val array = JSONArray()
         messages.forEach { m ->
             array.put(JSONObject().put("id", m.id).put("timestamp", m.timestamp)
-                .put("sender", m.sender).put("content", m.content).put("kind", m.kind))
+                .put("sender", m.sender).put("content", m.content).put("kind", m.kind)
+                .put("sourceKey", m.sourceKey))
         }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getKey())
