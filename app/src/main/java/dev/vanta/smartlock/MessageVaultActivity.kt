@@ -8,6 +8,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +34,54 @@ class MessageVaultActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
+                var vaultUnlocked by remember { mutableStateOf(false) }
+                var authStatus by remember { mutableStateOf("Authenticate to open your private vault.") }
+                val authenticateVault = {
+                    val allowed = if (android.os.Build.VERSION.SDK_INT >= 30) {
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    } else {
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG
+                    }
+                    if (BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {
+                        authStatus = "System authentication is unavailable on this device."
+                    } else {
+                        val infoBuilder = BiometricPrompt.PromptInfo.Builder()
+                            .setTitle("Unlock VANTA Message Vault")
+                            .setSubtitle("Use your system biometric or device credential")
+                            .setAllowedAuthenticators(allowed)
+                        val prompt = BiometricPrompt(
+                            this,
+                            ContextCompat.getMainExecutor(this),
+                            object : BiometricPrompt.AuthenticationCallback() {
+                                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                    vaultUnlocked = true
+                                    authStatus = "Vault unlocked."
+                                }
+                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                    authStatus = errString.toString()
+                                }
+                                override fun onAuthenticationFailed() {
+                                    authStatus = "Authentication failed. Try again."
+                                }
+                            }
+                        )
+                        prompt.authenticate(infoBuilder.build())
+                    }
+                }
+                LaunchedEffect(Unit) { authenticateVault() }
+                if (!vaultUnlocked) {
+                    Column(Modifier.fillMaxSize().background(VaultBlack).padding(24.dp), verticalArrangement = Arrangement.Center) {
+                        Text("VANTA / VOID", color = VaultCyan, fontSize = 20.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text("MESSAGE VAULT LOCKED", color = Color.White, fontSize = 16.sp)
+                        Spacer(Modifier.height(8.dp))
+                        Text(authStatus, color = Color.LightGray, fontSize = 12.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Button(onClick = { authenticateVault() }) { Text("AUTHENTICATE") }
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { finish() }) { Text("CLOSE VAULT") }
+                    }
+                } else {
                 var messages by remember { mutableStateOf(VaultStore.load(this)) }
                 var voiceNotes by remember { mutableStateOf(VoiceNoteStore.list(this)) }
                 var importStatus by remember { mutableStateOf("Voice notes are imported only when you choose the files.") }
@@ -159,6 +210,7 @@ class MessageVaultActivity : FragmentActivity() {
                     }
                     Spacer(Modifier.height(8.dp))
                     Text("Audio import uses Android's file picker: you choose each file and VANTA copies it into private app storage. It does not extract audio from WhatsApp or bypass app security. Deleted audio can only be imported if you still have an accessible copy or backup.", color = Color.Gray, fontSize = 10.sp)
+                } 
                 }
             }
         }
