@@ -56,8 +56,15 @@ class MessageVaultActivity : FragmentActivity() {
                             ContextCompat.getMainExecutor(this),
                             object : BiometricPrompt.AuthenticationCallback() {
                                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                    vaultUnlocked = true
-                                    authStatus = "Vault unlocked."
+                                    // A late callback must never unlock the vault after the
+                                    // activity has already moved to the background.
+                                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                                        vaultUnlocked = true
+                                        authStatus = "Vault unlocked."
+                                    } else {
+                                        vaultUnlocked = false
+                                        authStatus = "Vault relocked. Authenticate to continue."
+                                    }
                                 }
                                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                                     authStatus = errString.toString()
