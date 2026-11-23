@@ -11,6 +11,7 @@ VANTA is an Android security companion with Android's real biometric/device-cred
 - Captures readable notification title/body previews from WhatsApp and WhatsApp Business only.
 - Stores up to 300 previews encrypted with AES-GCM using a key held by Android Keystore.
 - Screen to enable notification access and clear the WhatsApp archive.
+- Message Vault requires Android system authentication and automatically relocks when the activity is backgrounded; returning to the vault requires authentication again.
 - User-selected audio import through Android's system document picker; new imports are encrypted with AES-GCM using a separate Android Keystore key.
 - Audio playback decrypts into a temporary cache file and removes that file after playback or when the screen closes; users can delete imported audio.
 - 50 MB per-file import limit.
