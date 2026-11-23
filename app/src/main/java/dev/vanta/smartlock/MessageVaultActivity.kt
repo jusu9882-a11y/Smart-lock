@@ -71,7 +71,7 @@ class MessageVaultActivity : FragmentActivity() {
                     }
                 }
                 LaunchedEffect(Unit) { authenticateVault() }
-                DisposableEffect(this, authenticateVault) {
+                DisposableEffect(Unit) {
                     var backgrounded = false
                     val observer = LifecycleEventObserver { _, event ->
                         when (event) {
