@@ -162,7 +162,7 @@ TROUBLESHOOTING
 • Messages remain queued: reconnect to the same trusted peer and keep both VANTA screens open.
 
 CURRENT LIMITATIONS
-This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh relay, group chats, photos, files, voice messages, automatic background delivery, and automatic reconnection are not available yet.
+This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi Direct works only when participating phones are physically nearby. Multi-hop relay, voice messages, and reliable background delivery are not available yet.
         """.trimIndent()
         val body = TextView(this).apply {
             text = guide
