@@ -88,7 +88,7 @@ class ChatSecurity(context: Context) {
 
     fun fingerprint(encodedPublicKey: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(encodedPublicKey)
-            .take(16).joinToString(":") { "%02X".format(it) }
+            .take(16).joinToString(":") { "%02X".format(it.toInt() and 0xff) }
 
     fun deriveSessionKey(peerPublicEncoded: ByteArray): ByteArray {
         val own = identity()
