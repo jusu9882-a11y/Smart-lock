@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.NetworkInfo
+import android.location.LocationManager
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pInfo
@@ -70,6 +71,16 @@ class WifiDirectTransport(
     @SuppressLint("MissingPermission")
     fun startDiscovery() {
         if (closed.get()) return
+        if (Build.VERSION.SDK_INT in 26..32) {
+            val location = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val enabled = if (Build.VERSION.SDK_INT >= 28) location.isLocationEnabled
+                else location.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                    location.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            if (!enabled) {
+                listener.onStatus("Turn on Android Location services for Wi-Fi Direct discovery, then search again.")
+                return
+            }
+        }
         if (!registered) {
             val filter = IntentFilter().apply {
                 addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
