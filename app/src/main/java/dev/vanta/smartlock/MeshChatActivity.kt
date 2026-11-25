@@ -59,7 +59,11 @@ class MeshChatActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         security = ChatSecurity(this)
-        store = ChatStore(this, security)
+        store = ChatStore(this)
+        VantaNotifications.createChannel(this)
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 42)
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 28, 24, 20)
@@ -318,6 +322,7 @@ This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh
                 val plain = security.decryptMessage(key, cipherText)
                 val message = String(plain, Charsets.UTF_8)
                 store.addIncoming(id, address, message)
+                VantaNotifications.showMessage(this, address)
                 sendFrame("ACK:$id")
                 main.post { refreshHistory() }
             }
