@@ -57,7 +57,17 @@ class MeshChatActivity : Activity() {
             checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun hasWifiPermission(): Boolean = if (Build.VERSION.SDK_INT >= 33)\n        checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED\n    else checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED\n\n    private fun requestWifiPermission() {\n        val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES\n            else Manifest.permission.ACCESS_FINE_LOCATION\n        ActivityCompat.requestPermissions(this, arrayOf(permission), 43)\n    }\n\n    private fun requestBluetoothPermissions() {
+    private fun hasWifiPermission(): Boolean = if (Build.VERSION.SDK_INT >= 33)
+        checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+    else checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestWifiPermission() {
+        val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES
+            else Manifest.permission.ACCESS_FINE_LOCATION
+        ActivityCompat.requestPermissions(this, arrayOf(permission), 43)
+    }
+
+    private fun requestBluetoothPermissions() {
         if (Build.VERSION.SDK_INT >= 31) ActivityCompat.requestPermissions(
             this, arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_ADVERTISE), 41
