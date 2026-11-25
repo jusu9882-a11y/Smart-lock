@@ -102,6 +102,13 @@ class MeshChatActivity : Activity() {
         root.addView(peers)
         val connect = Button(this).apply { text = "CONNECT TO PAIRED DEVICE" }
         root.addView(connect)
+        root.addView(label("OFFLINE WI-FI DIRECT", 12f, 0xFF8294AA.toInt()))
+        val wifiDiscover = Button(this).apply { text = "DISCOVER NEARBY WI-FI DIRECT PHONES" }
+        root.addView(wifiDiscover)
+        wifiPeers = Spinner(this)
+        root.addView(wifiPeers)
+        val wifiConnect = Button(this).apply { text = "CONNECT OVER WI-FI DIRECT" }
+        root.addView(wifiConnect)
         transcript = label("Pair both phones in Android Bluetooth settings to begin.", 14f, 0xFFE7F2FF.toInt())
         transcript.gravity = Gravity.BOTTOM
         val scroll = ScrollView(this).apply { addView(transcript) }
@@ -127,6 +134,27 @@ class MeshChatActivity : Activity() {
             }
         }
         connect.setOnClickListener { connectSelected() }
+        wifiTransport = WifiDirectTransport(this, object : WifiDirectTransport.Listener {
+            override fun onPeersChanged(peers: List<WifiP2pDevice>) {
+                main.post {
+                    discoveredWifiPeers = peers
+                    wifiPeers.adapter = ArrayAdapter(this@MeshChatActivity, android.R.layout.simple_spinner_dropdown_item,
+                        peers.map { "${it.deviceName.ifBlank { "VANTA device" }} • ${it.deviceAddress}" })
+                }
+            }
+            override fun onStatus(message: String) { main.post { status.text = message } }
+            override fun onConnected(input: InputStream, output: OutputStream, close: () -> Unit, peerId: String) {
+                attachStreams(input, output, close, "wifi:$peerId")
+            }
+        })
+        wifiDiscover.setOnClickListener {
+            if (!hasWifiPermission()) requestWifiPermission() else wifiTransport.startDiscovery()
+        }
+        wifiConnect.setOnClickListener {
+            if (!hasWifiPermission()) requestWifiPermission()
+            else discoveredWifiPeers.getOrNull(wifiPeers.selectedItemPosition)?.let { wifiTransport.connect(it) }
+                ?: run { status.text = "Discover nearby Wi-Fi Direct phones first." }
+        }
         send.setOnClickListener { sendMessage() }
         if (adapter == null) status.text = "This phone does not support Bluetooth."
         else if (!hasBluetoothPermissions()) requestBluetoothPermissions()
@@ -190,10 +218,13 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 43) {\n            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) wifiTransport.startDiscovery()\n            else status.text = "Nearby Wi-Fi permission is required for Wi-Fi Direct discovery."\n        } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+        if (requestCode == 43) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) wifiTransport.startDiscovery()
+            else status.text = "Nearby Wi-Fi permission is required for Wi-Fi Direct discovery."
+        } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             refreshPeers()
             status.text = "Bluetooth permissions granted. Pair devices in Android settings."
-        } else status.text = "Bluetooth permissions are required for nearby chat."
+        } else if (requestCode == 41) status.text = "Bluetooth permissions are required for nearby chat."
     }
 
     private fun pairedDevices(): List<android.bluetooth.BluetoothDevice> {
@@ -408,8 +439,10 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
     }
 
     override fun onDestroy() {
+        try { activeClose?.invoke() } catch (_: Exception) {}
         try { socket?.close() } catch (_: Exception) {}
         try { server?.close() } catch (_: Exception) {}
+        wifiTransport.close()
         store.close()
         super.onDestroy()
     }
