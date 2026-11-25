@@ -1,47 +1,47 @@
-# VANTA — Android Security Companion
+# VANTA MESH — Offline One-to-One Chat
 
-**Codename:** VOID · OLED black + electric cyan
+VANTA is now a focused Android chat app. The app opens directly into its offline chat screen. Phone locking, biometric authentication, WhatsApp notification archiving, audio vault, and app-locking modules are excluded from this chat-only build.
 
-VANTA is an Android security companion with Android's real biometric/device-credential prompt and an explicit Device Admin action to lock the phone. It is not a replacement for Android's lock screen.
+## Current chat milestone (v0.7.0)
 
-## Implemented in v0.6.0
-- AndroidX BiometricPrompt with device-credential fallback when supported.
-- Explicit Device Admin activation and **LOCK DEVICE NOW** using Android's `DevicePolicyManager.lockNow()`.
-- **WhatsApp Mode** using an Android `NotificationListenerService`.
-- Captures readable notification title/body previews from WhatsApp and WhatsApp Business only.
-- Stores up to 300 previews encrypted with AES-GCM using a key held by Android Keystore.
-- Screen to enable notification access and clear the WhatsApp archive.
-- Message Vault requires Android system authentication and automatically relocks when the activity is backgrounded; returning to the vault requires authentication again.
-- User-selected audio import through Android's system document picker; new imports are encrypted with AES-GCM using a separate Android Keystore key.
-- Audio playback decrypts into a temporary cache file and removes that file after playback or when the screen closes; users can delete imported audio.
-- 50 MB per-file import limit.
-- VANTA MESH v1: direct one-to-one messaging over Android secure Bluetooth RFCOMM, designed to work without mobile data, Wi-Fi internet, or Google Play services.\n- Uses Android-bonded devices; the receiving phone opens a discoverable listener and the sending phone connects to the paired device.\n- No network permission, advertising, or analytics.
+- Direct one-to-one text messaging over Android Bluetooth RFCOMM.
+- Designed to work without mobile data, Wi-Fi internet, an account, a cloud service, or Google Play services.
+- Android Bluetooth bonding is used for peer authentication and Bluetooth link security.
+- No INTERNET permission, advertising, analytics, or remote service.
+- Android 8.0 (API 26) or later.
 
-## WhatsApp Mode: capabilities and limits
-- The user must explicitly enable Notification Access in Android Settings.
-- VANTA captures only WhatsApp notification content Android exposes after access is enabled.
-- If previews are hidden, disabled, grouped without readable text, or withheld, VANTA cannot save unavailable message text.
-- If a message is deleted after its readable preview was captured, the saved preview may remain. This is not guaranteed for every notification.
-- VANTA cannot inspect WhatsApp's private chat database, bypass end-to-end encryption, or recover messages that were never captured.
-- Notification access does not provide actual voice-note audio files or other media. VANTA supports manually importing audio files that the user can already access through Android's system file picker. It does not automatically extract audio from WhatsApp or restore deleted media.
+## Connect two phones
 
-## VANTA MESH: current scope and limitations\n- Both phones must have Bluetooth and must be paired in Android Bluetooth settings before chatting.\n- Android secure RFCOMM provides an encrypted, authenticated Bluetooth link for bonded devices. This first milestone does not yet implement a separate application-layer end-to-end encryption protocol or an in-app identity/fingerprint verification screen.\n- Chat history is currently held in memory only and is cleared when the chat screen closes; messages are not persisted.\n- This is direct one-to-one communication only. Multi-hop mesh relaying, store-and-forward queues, background delivery, and automatic peer discovery are not implemented yet.\n- Bluetooth range, Android vendor behavior, and battery/background restrictions affect connectivity.\n\n## Privacy and security
-- Notification access is a powerful Android special permission; grant it only if you understand the access.
-- Message previews are encrypted at rest using AES-GCM with a key stored in Android Keystore.
-- New audio imports are encrypted at rest using AES-GCM with a separate Android Keystore key. During playback, a temporary decrypted copy exists in the app cache and is deleted after playback or when the screen closes.
-- Audio files imported by older VANTA versions may remain unencrypted until the user deletes and imports them again. They are identified as **LEGACY FILE** in the list.
-- Clear the message archive or delete audio files from WhatsApp Mode to remove saved items. Removing app data also removes app-private files and the app's Keystore keys.
-- VANTA does not collect, store, or handle biometric templates, PINs, passwords, or pattern secrets.
-- The in-app authenticated state is an app UI gate only. It does not prevent leaving the app or replace Android's secure lock screen.
+1. Turn on Bluetooth on both phones.
+2. Pair the phones in Android Bluetooth settings.
+3. Open VANTA MESH on the receiving phone and tap **MAKE THIS PHONE DISCOVERABLE**. Accept Android's prompt and leave the screen open.
+4. On the sending phone, open VANTA MESH, choose the paired phone from the list, and tap **CONNECT TO PAIRED DEVICE**.
+5. When the connection status says CONNECTED, exchange messages.
+
+## Important current limitations
+
+- This milestone supports one direct connection at a time; it is not yet multi-hop mesh.
+- Both devices must be paired in Android settings first and remain within Bluetooth range.
+- The receiver must keep the MESH screen open while waiting; background delivery is not implemented.
+- Chat history is held in memory and clears when the chat screen closes.
+- The transport relies on Android's bonded Bluetooth link security. A separate application-layer end-to-end encryption protocol and in-app identity fingerprint verification are not yet implemented.
+- Durable offline queues, delivery/read receipts, media messages, group chat, and relay forwarding are not implemented yet.
+
+## Permissions
+
+The app requests Bluetooth Connect, Scan, and Advertise permissions on Android 12 and later. On older Android versions, it uses the legacy Bluetooth permissions. Bluetooth is the only app capability declared; the manifest does not request internet access, notification access, accessibility access, or device administration.
 
 ## Build
-The project uses Android Gradle Plugin 8.7.3 and Java 17. GitHub Actions builds a debug APK and uploads it as an artifact when a commit is pushed or manually triggered.
 
-## Next verification
-- [ ] CI build succeeds and APK artifact is available
-- [ ] Install and test on the target Android phone
-- [ ] Confirm Notification Access opt-in and WhatsApp-only incoming preview capture
-- [ ] Test hidden-preview, grouped-notification, and deleted-after-capture behavior
-- [ ] Test encrypted audio import, playback, deletion, and legacy-file handling
-- [ ] Accessibility, reduced-motion, and lock/re-auth lifecycle testing
-- [ ] Explore approved Device Owner / dedicated-device deployment separately; factory reset must never be attempted without backup and explicit approval
+Android Gradle Plugin 8.7.3, Kotlin 2.0.21, Java 17. GitHub Actions builds a debug APK and uploads it as `vanta-debug-apk`.
+
+## Manual test checklist
+
+- [ ] Pair two Android phones in system Bluetooth settings.
+- [ ] Grant Bluetooth permissions on both phones.
+- [ ] Start discoverable listener on receiving phone.
+- [ ] Connect from sending phone.
+- [ ] Send messages in both directions, including emoji and punctuation.
+- [ ] Verify chat works with mobile data and Wi-Fi internet disabled.
+- [ ] Verify permission denial is handled without a crash.
+- [ ] Verify disconnect and reconnect behavior.
