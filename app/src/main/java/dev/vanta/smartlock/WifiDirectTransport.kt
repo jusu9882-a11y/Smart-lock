@@ -59,7 +59,7 @@ class WifiDirectTransport(
                     val network = intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
                     if (network?.isConnected == true) requestConnectionInfo()
                     else {
-                        connecting.set(false)
+                        closeSockets()
                         listener.onStatus("Wi-Fi Direct peer disconnected")
                     }
                 }
@@ -120,7 +120,9 @@ class WifiDirectTransport(
         thread(name = "vanta-wifi-direct-server") {
             try {
                 server?.close()
-                val socketServer = ServerSocket(8988)
+                val socketServer = ServerSocket()
+                socketServer.reuseAddress = true
+                socketServer.bind(InetSocketAddress(8988))
                 server = socketServer
                 listener.onStatus("Wi-Fi Direct group ready • waiting for peer")
                 val socket = socketServer.accept()
@@ -136,16 +138,27 @@ class WifiDirectTransport(
 
     private fun connectToOwner(info: WifiP2pInfo) {
         thread(name = "vanta-wifi-direct-client") {
-            try {
-                val socket = Socket()
-                client = socket
-                socket.connect(InetSocketAddress(info.groupOwnerAddress, 8988), 15_000)
-                listener.onConnected(socket.getInputStream(), socket.getOutputStream(),
-                    { closeSockets() }, info.groupOwnerAddress.hostAddress ?: "wifi-direct-peer")
-            } catch (e: Exception) {
-                connecting.set(false)
-                if (!closed.get()) listener.onStatus("Wi-Fi Direct socket failed: ${e.message ?: "link error"}")
+            var lastError: Exception? = null
+            repeat(12) { attempt ->
+                if (closed.get()) return@thread
+                val candidate = Socket()
+                try {
+                    candidate.tcpNoDelay = true
+                    candidate.connect(InetSocketAddress(info.groupOwnerAddress, 8988), 3_000)
+                    client = candidate
+                    listener.onConnected(candidate.getInputStream(), candidate.getOutputStream(),
+                        { closeSockets() }, info.groupOwnerAddress.hostAddress ?: "wifi-direct-peer")
+                    return@thread
+                } catch (e: Exception) {
+                    lastError = e
+                    try { candidate.close() } catch (_: Exception) {}
+                    if (attempt < 11) Thread.sleep(500)
+                }
             }
+            connecting.set(false)
+            if (!closed.get()) listener.onStatus(
+                "Wi-Fi Direct could not reach the group owner after retries: ${lastError?.message ?: "socket error"}"
+            )
         }
     }
 
