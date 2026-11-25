@@ -112,7 +112,7 @@ class MeshChatActivity : Activity() {
         root.addView(header, LinearLayout.LayoutParams(-1, dp(58)))
         help.setOnClickListener { showHelp() }
 
-        val statusCard = uiCard(0xFF111D2B, 0xFF20384A)
+        val statusCard = uiCard(0xFF111D2B.toInt(), 0xFF20384A.toInt())
         val statusRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -127,7 +127,7 @@ class MeshChatActivity : Activity() {
 
         val connectionToggle = uiButton("CONNECTIONS  +", false)
         root.addView(connectionToggle, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
-        val connectionPanel = uiCard(0xFF0E1723, 0xFF1D3042)
+        val connectionPanel = uiCard(0xFF0E1723.toInt(), 0xFF1D3042.toInt())
         connectionPanel.orientation = LinearLayout.VERTICAL
         connectionPanel.setPadding(dp(12), dp(10), dp(12), dp(10))
         val bluetoothTitle = uiText("BLUETOOTH", 10f, 0xFF65E4FF.toInt(), true)
@@ -167,12 +167,12 @@ class MeshChatActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }
-        val transcriptCard = uiCard(0xFF0D1621, 0xFF1C2D3D)
+        val transcriptCard = uiCard(0xFF0D1621.toInt(), 0xFF1C2D3D.toInt())
         transcriptCard.addView(transcript)
         chatScroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
-            addView(transcriptCard, ScrollView.LayoutParams(-1, -1))
+            addView(transcriptCard, android.widget.FrameLayout.LayoutParams(-1, -1))
         }
         root.addView(chatScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         appendMessageBubble("VANTA", "Your private conversation appears here. Connect to a trusted phone to begin.", false)
@@ -190,7 +190,7 @@ class MeshChatActivity : Activity() {
             maxLines = 4
             minLines = 1
             setPadding(dp(13), dp(8), dp(13), dp(8))
-            background = uiBackground(0xFF111E2B, 0xFF2B4053, 16)
+            background = uiBackground(0xFF111E2B.toInt(), 0xFF2B4053.toInt(), 16)
         }
         composer.addView(input, LinearLayout.LayoutParams(0, dp(52), 1f).apply { rightMargin = dp(8) })
         val send = uiButton("SEND  ↑", true)
