@@ -41,7 +41,8 @@ class MeshChatActivity : Activity() {
     private fun hasBluetoothPermissions(): Boolean {
         if (Build.VERSION.SDK_INT < 31) return true
         return checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
-            checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+            checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun requestBluetoothPermissions() {
