@@ -39,7 +39,7 @@ class SplashActivity : Activity() {
             setTextColor(0xFF55D9FF.toInt())
         }
         val mesh = TextView(this).apply {
-            text = "M E S H"
+            text = "M E S H  •  OFFLINE CHAT"
             textSize = 16f
             gravity = Gravity.CENTER
             setTextColor(0xFFE7F2FF.toInt())
