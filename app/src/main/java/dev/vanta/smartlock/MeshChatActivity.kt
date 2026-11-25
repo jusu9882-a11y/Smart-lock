@@ -47,7 +47,7 @@ class MeshChatActivity : Activity() {
     private fun requestBluetoothPermissions() {
         if (Build.VERSION.SDK_INT >= 31) ActivityCompat.requestPermissions(
             this,
-            arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN),
+            arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE),
             41
         )
     }
