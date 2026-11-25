@@ -192,11 +192,25 @@ CONNECT THE PHONES
 5. On first contact, compare the fingerprint shown in VANTA on both phones using a trusted separate channel. Accept only if they match.
 6. Repeat the trust confirmation on the other phone if prompted. The status should say END-TO-END ENCRYPTED.
 
+USE WI-FI DIRECT (NO ROUTER / NO INTERNET)
+1. Turn Wi-Fi on on both phones. A mobile data plan or Internet connection is not needed.
+2. Grant Nearby Wi-Fi devices permission (Android 13+) or Location permission (older Android) when asked. Android may also require Location services to be switched on for discovery.
+3. On both phones, tap DISCOVER NEARBY WI-FI DIRECT PHONES.
+4. On one phone, select the other phone from the Wi-Fi Direct list and tap CONNECT OVER WI-FI DIRECT.
+5. Verify the peer fingerprint before accepting the first connection. Keep VANTA open on both phones.
+6. Wi-Fi Direct is a nearby direct radio link; it does not reach another town by itself.
+
 SEND A MESSAGE
 • Type in the message field and tap SEND / QUEUE MESSAGE.
-• Messages send when a secure Bluetooth session is active.
+• Messages send when a secure Bluetooth or Wi-Fi Direct session is active.
 • If disconnected, outgoing messages are saved encrypted on this phone and queued for the next connection.
 • A delivered acknowledgement removes the queued status.
+
+SEND A VOICE NOTE
+• Tap RECORD VOICE NOTE (MAX 20 SEC), speak, then tap STOP & SEND VOICE NOTE.
+• VANTA records AAC audio locally, encrypts it, and queues it for the selected peer.
+• Tap PLAY LAST VOICE NOTE to listen to the latest voice note stored in this conversation.
+• Keep the app open and a direct connection active to send/receive voice notes.
 
 HISTORY & PRIVACY
 • Conversation history is encrypted on this phone and remains after app restart.
@@ -212,7 +226,7 @@ TROUBLESHOOTING
 • Messages remain queued: reconnect to the same trusted peer and keep both VANTA screens open.
 
 CURRENT LIMITATIONS
-This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi Direct works only when participating phones are physically nearby. Multi-hop relay and reliable background delivery are not available yet. Voice notes are recorded locally, encrypted, and sent over the selected direct connection (maximum 20 seconds).
+This release supports direct Bluetooth and Wi-Fi Direct chat plus encrypted voice notes. Wi-Fi Direct works only when participating phones are physically nearby. Multi-hop relay and reliable background delivery are not available yet.
         """.trimIndent()
         val body = TextView(this).apply {
             text = guide
