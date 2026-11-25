@@ -462,7 +462,7 @@ Wi-Fi Direct is a nearby radio link, not a town-to-town radio. Longer-distance d
                     sendFrame("RLY:$encoded")
                 }
             } catch (e: Exception) {
-                main.post { status.text = "Mesh relay paused • @{e.message ?: "connection issue"}" }
+                main.post { status.text = "Mesh relay paused • ${e.message ?: "connection issue"}" }
             }
         }
     }
