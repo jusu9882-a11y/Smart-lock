@@ -228,8 +228,16 @@ TROUBLESHOOTING
 • Peer identity changed: stop and verify the device identity. Do not accept an unexpected change.
 • Messages remain queued: reconnect to the same trusted peer and keep both VANTA screens open.
 
-CURRENT LIMITATIONS
-This release supports direct Bluetooth and Wi-Fi Direct chat plus encrypted voice notes. Wi-Fi Direct works only when participating phones are physically nearby. Multi-hop relay and reliable background delivery are not available yet.
+OFFLINE MESH RELAY
+• Connect to and fingerprint-verify a recipient at least once.
+• Type a message and tap SEND VIA OFFLINE MESH, then choose that trusted recipient.
+• The message is encrypted for the recipient and signed by the sender. Relay phones store only the encrypted packet.
+• Connect this phone to a participating VANTA relay phone; it will exchange queued relay packets.
+• Each relay phone must later connect to another participating phone to move the packet onward.
+• The recipient verifies the sender fingerprint before opening the message. Delivery receipts travel back through the same store-and-forward process.
+
+LIMITATIONS
+Wi-Fi Direct is a nearby radio link, not a town-to-town radio. Longer-distance delivery requires a chain of participating phones that physically meet. Keep VANTA open and manually connect each hop; background relay and automatic discovery are not available. Packets expire after 7 days and are limited to 8 relay hops.
         """.trimIndent()
         val body = TextView(this).apply {
             text = guide
