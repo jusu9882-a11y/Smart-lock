@@ -8,9 +8,12 @@ import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.net.wifi.p2p.WifiP2pDevice
 import java.io.InputStream
+import java.io.File
 import java.io.OutputStream
 import android.content.pm.PackageManager
 import android.os.Build
+import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -40,6 +43,9 @@ class MeshChatActivity : Activity() {
     private lateinit var peers: Spinner
     private lateinit var wifiPeers: Spinner
     private lateinit var wifiTransport: WifiDirectTransport
+    private lateinit var voiceButton: Button
+    private var recorder: MediaRecorder? = null
+    private var recordingFile: File? = null
     private var discoveredWifiPeers: List<WifiP2pDevice> = emptyList()
     @Volatile private var activeConnectionId: String? = null
     @Volatile private var activeClose: (() -> Unit)? = null
@@ -119,6 +125,10 @@ class MeshChatActivity : Activity() {
         root.addView(input)
         val send = Button(this).apply { text = "SEND / QUEUE MESSAGE" }
         root.addView(send)
+        voiceButton = Button(this).apply { text = "RECORD VOICE NOTE (MAX 20 SEC)" }
+        root.addView(voiceButton)
+        val playVoice = Button(this).apply { text = "PLAY LAST VOICE NOTE" }
+        root.addView(playVoice)
         setContentView(root)
 
         discover.setOnClickListener {
@@ -156,6 +166,8 @@ class MeshChatActivity : Activity() {
                 ?: run { status.text = "Discover nearby Wi-Fi Direct phones first." }
         }
         send.setOnClickListener { sendMessage() }
+        voiceButton.setOnClickListener { if (recorder == null) startVoiceRecording() else stopVoiceRecording() }
+        playVoice.setOnClickListener { playLastVoiceNote() }
         if (adapter == null) status.text = "This phone does not support Bluetooth."
         else if (!hasBluetoothPermissions()) requestBluetoothPermissions()
         else refreshPeers()
@@ -218,7 +230,7 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 43) {
+        if (requestCode == 44) {\n            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startVoiceRecording()\n            else status.text = "Microphone permission is required to record voice notes."\n        } else if (requestCode == 43) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) wifiTransport.startDiscovery()
             else status.text = "Nearby Wi-Fi permission is required for Wi-Fi Direct discovery."
         } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
@@ -251,7 +263,7 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
         val rows = store.history(peer)
         transcript.text = if (rows.isEmpty()) "No messages yet. Messages are encrypted on this device."
             else rows.joinToString("\n") {
-                "${if (it.outgoing) "You" else "Peer"}: ${it.text}${if (it.outgoing && !it.delivered) "  • queued" else ""}"
+                "${if (it.outgoing) "You" else "Peer"}: ${if (it.text.startsWith("VOICE1:")) "[voice note]" else it.text}${if (it.outgoing && !it.delivered) "  • queued" else ""}"
             }
     }
 
@@ -423,6 +435,96 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
         }
     }
 
+    private fun startVoiceRecording() {
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 44)
+            return
+        }
+        try {
+            val file = File(cacheDir, "vanta_voice_${System.currentTimeMillis()}.m4a")
+            val active = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else MediaRecorder()
+            active.setAudioSource(MediaRecorder.AudioSource.MIC)
+            active.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            active.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            active.setAudioEncodingBitRate(32_000)
+            active.setAudioSamplingRate(22_050)
+            active.setMaxDuration(20_000)
+            active.setOutputFile(file.absolutePath)
+            active.setOnInfoListener { _, what, _ ->
+                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) main.post { stopVoiceRecording() }
+            }
+            active.prepare()
+            active.start()
+            recorder = active
+            recordingFile = file
+            voiceButton.text = "STOP & SEND VOICE NOTE"
+            status.text = "Recording locally • up to 20 seconds"
+        } catch (e: Exception) {
+            recorder?.release()
+            recorder = null
+            recordingFile?.delete()
+            recordingFile = null
+            status.text = "Could not start recording: ${e.message ?: "microphone unavailable"}"
+        }
+    }
+
+    private fun stopVoiceRecording() {
+        val active = recorder ?: return
+        val file = recordingFile
+        recorder = null
+        recordingFile = null
+        try {
+            active.stop()
+            active.release()
+            voiceButton.text = "RECORD VOICE NOTE (MAX 20 SEC)"
+            if (file == null || !file.exists()) {
+                status.text = "Voice recording was not saved."
+                return
+            }
+            val bytes = file.readBytes()
+            file.delete()
+            if (bytes.isEmpty() || bytes.size > 256 * 1024) {
+                status.text = "Voice note is empty or too large. Try a shorter recording."
+                return
+            }
+            val peer = activePeerAddress ?: selectedDevice()?.address
+            if (peer == null) {
+                status.text = "Connect to a peer before recording a voice note."
+                return
+            }
+            val payload = "VOICE1:" + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            store.add(peer, payload, true)
+            refreshHistory()
+            status.text = "Voice note encrypted and queued • connect to send"
+            if (sessionKey != null) flushPending()
+        } catch (e: Exception) {
+            try { active.reset(); active.release() } catch (_: Exception) {}
+            file?.delete()
+            voiceButton.text = "RECORD VOICE NOTE (MAX 20 SEC)"
+            status.text = "Recording did not finish cleanly. Please try again."
+        }
+    }
+
+    private fun playLastVoiceNote() {
+        try {
+            val peer = activePeerAddress ?: selectedDevice()?.address ?: return
+            val encoded = store.history(peer).lastOrNull { it.text.startsWith("VOICE1:") }?.text
+                ?: run { status.text = "No voice note in this conversation yet."; return }
+            val bytes = android.util.Base64.decode(encoded.removePrefix("VOICE1:"), android.util.Base64.DEFAULT)
+            val file = File(cacheDir, "vanta_playback.m4a")
+            file.writeBytes(bytes)
+            val player = MediaPlayer()
+            player.setDataSource(file.absolutePath)
+            player.setOnCompletionListener { it.release(); file.delete() }
+            player.setOnErrorListener { mp, _, _ -> mp.release(); file.delete(); status.text = "Could not play this voice note."; true }
+            player.prepare()
+            player.start()
+            status.text = "Playing encrypted voice note"
+        } catch (e: Exception) {
+            status.text = "Voice playback failed: ${e.message ?: "unsupported audio"}"
+        }
+    }
+
     private fun sendMessage() {
         val message = input.text.toString().trim()
         if (message.isEmpty()) return
@@ -439,6 +541,10 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
     }
 
     override fun onDestroy() {
+        try { recorder?.stop() } catch (_: Exception) {}
+        try { recorder?.release() } catch (_: Exception) {}
+        recorder = null
+        recordingFile?.delete()
         try { activeClose?.invoke() } catch (_: Exception) {}
         try { socket?.close() } catch (_: Exception) {}
         try { server?.close() } catch (_: Exception) {}
