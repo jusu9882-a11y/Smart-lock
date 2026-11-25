@@ -266,7 +266,7 @@ class MeshChatActivity : Activity() {
         timestamp: Long = System.currentTimeMillis()
     ) {
         val bubble = TextView(this).apply {
-            text = "\$sender  •  \${java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(timestamp))}\n\$message"
+            text = "$sender  •  ${java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(timestamp))}\n$message"
             textSize = 13f
             setTextColor(if (outgoing) 0xFF071722.toInt() else 0xFFDCE9F6.toInt())
             setPadding(dp(13), dp(10), dp(13), dp(10))
