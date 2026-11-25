@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.graphics.drawable.GradientDrawable
 import android.widget.*
 import androidx.core.app.ActivityCompat
 import java.io.BufferedReader
@@ -88,49 +89,131 @@ class MeshChatActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 42)
         }
+        window.statusBarColor = 0xFF080D15.toInt()
+        window.navigationBarColor = 0xFF080D15.toInt()
+        window.decorView.systemUiVisibility = 0
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 28, 24, 20)
-            setBackgroundColor(0xFF06090E.toInt())
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            setBackgroundColor(0xFF080D15.toInt())
         }
-        fun label(value: String, size: Float, color: Int = 0xFF55D9FF.toInt()) =
-            TextView(this).apply { text = value; textSize = size; setTextColor(color) }
-        root.addView(label("V A N T A   /   M E S H", 20f))
-        root.addView(label("OFFLINE CHAT • E2E ENCRYPTED • NO ACCOUNT", 11f, 0xFF8294AA.toInt()))
-        status = label("Checking Bluetooth…", 12f)
-        root.addView(status)
-        val help = Button(this).apply { text = "HELP / HOW TO USE VANTA" }
-        root.addView(help)
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brand.addView(uiText("VANTA", 25f, 0xFF65E4FF.toInt(), true))
+        brand.addView(uiText("PRIVATE MESSAGING NETWORK", 9f, 0xFF8295AC.toInt(), true))
+        header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        val help = uiButton("?", true).apply { textSize = 18f }
+        header.addView(help, LinearLayout.LayoutParams(dp(46), dp(46)))
+        root.addView(header, LinearLayout.LayoutParams(-1, dp(58)))
         help.setOnClickListener { showHelp() }
-        val discover = Button(this).apply { text = "MAKE THIS PHONE DISCOVERABLE" }
-        root.addView(discover)
-        peers = Spinner(this)
-        root.addView(peers)
-        val connect = Button(this).apply { text = "CONNECT TO PAIRED DEVICE" }
-        root.addView(connect)
-        root.addView(label("OFFLINE WI-FI DIRECT", 12f, 0xFF8294AA.toInt()))
-        val wifiDiscover = Button(this).apply { text = "DISCOVER NEARBY WI-FI DIRECT PHONES" }
-        root.addView(wifiDiscover)
-        wifiPeers = Spinner(this)
-        root.addView(wifiPeers)
-        val wifiConnect = Button(this).apply { text = "CONNECT OVER WI-FI DIRECT" }
-        root.addView(wifiConnect)
-        transcript = label("Pair both phones in Android Bluetooth settings to begin.", 14f, 0xFFE7F2FF.toInt())
-        transcript.gravity = Gravity.BOTTOM
-        val scroll = ScrollView(this).apply { addView(transcript) }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        input = EditText(this).apply {
-            hint = "Write a message…"; setTextColor(-1); setHintTextColor(0xFF8294AA.toInt())
+
+        val statusCard = uiCard(0xFF111D2B, 0xFF20384A)
+        val statusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(13), dp(10), dp(13), dp(10))
         }
-        root.addView(input)
-        val send = Button(this).apply { text = "SEND / QUEUE MESSAGE" }
-        root.addView(send)
-        val meshSend = Button(this).apply { text = "SEND VIA OFFLINE MESH" }
-        root.addView(meshSend)
-        voiceButton = Button(this).apply { text = "RECORD VOICE NOTE (MAX 20 SEC)" }
-        root.addView(voiceButton)
-        val playVoice = Button(this).apply { text = "PLAY LAST VOICE NOTE" }
-        root.addView(playVoice)
+        val statusDot = uiText("●", 12f, 0xFF45E0B1.toInt(), true)
+        statusRow.addView(statusDot)
+        status = uiText("Ready • connect to a nearby VANTA phone", 12f, 0xFFD8E7F5.toInt(), true)
+        statusRow.addView(status, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(9) })
+        statusCard.addView(statusRow)
+        root.addView(statusCard, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+
+        val connectionToggle = uiButton("CONNECTIONS  +", false)
+        root.addView(connectionToggle, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
+        val connectionPanel = uiCard(0xFF0E1723, 0xFF1D3042)
+        connectionPanel.orientation = LinearLayout.VERTICAL
+        connectionPanel.setPadding(dp(12), dp(10), dp(12), dp(10))
+        val bluetoothTitle = uiText("BLUETOOTH", 10f, 0xFF65E4FF.toInt(), true)
+        connectionPanel.addView(bluetoothTitle)
+        val discover = uiButton("MAKE THIS PHONE DISCOVERABLE", false)
+        connectionPanel.addView(discover, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(6) })
+        peers = Spinner(this)
+        connectionPanel.addView(peers, LinearLayout.LayoutParams(-1, dp(46)))
+        val connect = uiButton("CONNECT TO PAIRED DEVICE", true)
+        connectionPanel.addView(connect, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
+        val wifiTitle = uiText("WI-FI DIRECT  •  NO ROUTER REQUIRED", 10f, 0xFF65E4FF.toInt(), true)
+        connectionPanel.addView(wifiTitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+        val wifiDiscover = uiButton("FIND NEARBY PHONES", false)
+        connectionPanel.addView(wifiDiscover, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(6) })
+        wifiPeers = Spinner(this)
+        connectionPanel.addView(wifiPeers, LinearLayout.LayoutParams(-1, dp(46)))
+        val wifiConnect = uiButton("CONNECT OVER WI-FI DIRECT", true)
+        connectionPanel.addView(wifiConnect, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
+        connectionPanel.visibility = android.view.View.GONE
+        root.addView(connectionPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        connectionToggle.setOnClickListener {
+            val expanded = connectionPanel.visibility == android.view.View.VISIBLE
+            connectionPanel.visibility = if (expanded) android.view.View.GONE else android.view.View.VISIBLE
+            connectionToggle.text = if (expanded) "CONNECTIONS  +" else "CONNECTIONS  −"
+        }
+
+        val chatHeading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        chatHeading.addView(uiText("SECURE CHAT", 12f, 0xFFE7F2FF.toInt(), true),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        chatHeading.addView(uiText("END-TO-END ENCRYPTED", 9f, 0xFF45E0B1.toInt(), true))
+        root.addView(chatHeading, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(5) })
+
+        transcript = uiText(
+            "Your private conversation appears here.\n\nConnect with a trusted VANTA phone to begin.",
+            14f, 0xFFDCE8F5.toInt(), false
+        ).apply {
+            setPadding(dp(14), dp(16), dp(14), dp(16))
+            gravity = Gravity.BOTTOM
+            setLineSpacing(dp(4).toFloat(), 1f)
+        }
+        val transcriptCard = uiCard(0xFF0D1621, 0xFF1C2D3D)
+        transcriptCard.addView(transcript)
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(transcriptCard, ScrollView.LayoutParams(-1, -1))
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val composer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(10), 0, dp(4))
+        }
+        input = EditText(this).apply {
+            hint = "Write a secure message…"
+            setTextColor(0xFFEAF5FF.toInt())
+            setHintTextColor(0xFF7E91A7.toInt())
+            textSize = 14f
+            maxLines = 4
+            minLines = 1
+            setPadding(dp(13), dp(8), dp(13), dp(8))
+            background = uiBackground(0xFF111E2B, 0xFF2B4053, 16)
+        }
+        composer.addView(input, LinearLayout.LayoutParams(0, dp(52), 1f).apply { rightMargin = dp(8) })
+        val send = uiButton("SEND  ↑", true)
+        composer.addView(send, LinearLayout.LayoutParams(dp(92), dp(52)))
+        root.addView(composer)
+
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val meshSend = uiButton("MESH RELAY", false)
+        actions.addView(meshSend, LinearLayout.LayoutParams(0, dp(42), 1f).apply { rightMargin = dp(5) })
+        voiceButton = uiButton("VOICE NOTE", false)
+        actions.addView(voiceButton, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(5); rightMargin = dp(5) })
+        val playVoice = uiButton("PLAY LAST", false)
+        actions.addView(playVoice, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(5) })
+        root.addView(actions)
+        root.addView(uiText("OFFLINE BY DESIGN  •  NO CLOUD  •  NO MOBILE DATA", 9f, 0xFF62778E.toInt(), true).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(2))
+        })
+
         setContentView(root)
 
         discover.setOnClickListener {
@@ -176,6 +259,49 @@ class MeshChatActivity : Activity() {
         else refreshPeers()
     }
 
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
+
+    private fun uiBackground(fill: Int, stroke: Int, radius: Int): GradientDrawable =
+        GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(radius).toFloat()
+            setColor(fill)
+            setStroke(dp(1), stroke)
+        }
+
+    private fun uiCard(fill: Int, stroke: Int): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = uiBackground(fill, stroke, 18)
+            clipToOutline = true
+        }
+
+    private fun uiText(value: String, size: Float, color: Int, bold: Boolean): TextView =
+        TextView(this).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            if (bold) typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
+        }
+
+    private fun uiButton(value: String, primary: Boolean): Button =
+        Button(this).apply {
+            text = value
+            isAllCaps = false
+            textSize = 11f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
+            setTextColor(if (primary) 0xFF07121B.toInt() else 0xFFBCEEFF.toInt())
+            background = uiBackground(
+                if (primary) 0xFF65E4FF.toInt() else 0xFF142536.toInt(),
+                if (primary) 0xFF65E4FF.toInt() else 0xFF2B5068.toInt(),
+                14
+            )
+            minHeight = dp(40)
+            minimumHeight = dp(40)
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+            stateListAnimator = null
+        }
 
     private fun showHelp() {
         val guide = """
