@@ -38,7 +38,8 @@ class ChatStore(context: Context, private val security: ChatSecurity) :
         // Versioned migrations will be added before any schema change is shipped.
     }
 
-    @Synchronized fun add(peer: String, text: String, outgoing: Boolean): String {
+    @Synchronized
+    fun add(peer: String, text: String, outgoing: Boolean): String {
         val id = UUID.randomUUID().toString()
         val values = ContentValues().apply {
             put("id", id)
@@ -52,27 +53,50 @@ class ChatStore(context: Context, private val security: ChatSecurity) :
         return id
     }
 
-    @Synchronized fun addIncoming(id: String, peer: String, text: String) {\n        val values = ContentValues().apply {\n            put("id", id)\n            put("peer", peer)\n            put("body", security.encryptAtRest(text.toByteArray(Charsets.UTF_8)))\n            put("outgoing", 0)\n            put("delivered", 1)\n            put("created_at", System.currentTimeMillis())\n        }\n        writableDatabase.insertWithOnConflict("messages", null, values, SQLiteDatabase.CONFLICT_IGNORE)\n    }\n\n    @Synchronized fun history(peer: String, limit: Int = 500): List<StoredChatMessage> {
+    @Synchronized
+    fun addIncoming(id: String, peer: String, text: String) {
+        val values = ContentValues().apply {
+            put("id", id)
+            put("peer", peer)
+            put("body", security.encryptAtRest(text.toByteArray(Charsets.UTF_8)))
+            put("outgoing", 0)
+            put("delivered", 1)
+            put("created_at", System.currentTimeMillis())
+        }
+        writableDatabase.insertWithOnConflict("messages", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+    }
+
+    @Synchronized
+    fun history(peer: String, limit: Int = 500): List<StoredChatMessage> {
         val result = ArrayList<StoredChatMessage>()
-        readableDatabase.query("messages", arrayOf("id", "peer", "body", "outgoing", "delivered", "created_at"),
-            "peer = ?", arrayOf(peer), null, null, "created_at ASC", limit.coerceIn(1, 2000).toString()
+        readableDatabase.query(
+            "messages",
+            arrayOf("id", "peer", "body", "outgoing", "delivered", "created_at"),
+            "peer = ?", arrayOf(peer), null, null, "created_at ASC",
+            limit.coerceIn(1, 2000).toString()
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 val body = security.decryptAtRest(cursor.getBlob(2))
-                result.add(StoredChatMessage(
-                    cursor.getString(0), cursor.getString(1), String(body, Charsets.UTF_8),
-                    cursor.getInt(3) == 1, cursor.getInt(4) == 1, cursor.getLong(5)
-                ))
+                result.add(
+                    StoredChatMessage(
+                        cursor.getString(0), cursor.getString(1), String(body, Charsets.UTF_8),
+                        cursor.getInt(3) == 1, cursor.getInt(4) == 1, cursor.getLong(5)
+                    )
+                )
             }
         }
         return result
     }
 
-    @Synchronized fun pending(peer: String): List<StoredChatMessage> =
+    @Synchronized
+    fun pending(peer: String): List<StoredChatMessage> =
         history(peer, 2000).filter { it.outgoing && !it.delivered }
 
-    @Synchronized fun markDelivered(id: String) {
-        writableDatabase.update("messages", ContentValues().apply { put("delivered", 1) },
-            "id = ?", arrayOf(id))
+    @Synchronized
+    fun markDelivered(id: String) {
+        writableDatabase.update(
+            "messages", ContentValues().apply { put("delivered", 1) },
+            "id = ?", arrayOf(id)
+        )
     }
 }
