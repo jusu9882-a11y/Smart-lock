@@ -39,7 +39,8 @@ class MeshChatActivity : Activity() {
     private lateinit var security: ChatSecurity
     private lateinit var store: ChatStore
     private lateinit var status: TextView
-    private lateinit var transcript: TextView
+    private lateinit var transcript: LinearLayout
+    private lateinit var chatScroll: ScrollView
     private lateinit var input: EditText
     private lateinit var peers: Spinner
     private lateinit var wifiPeers: Spinner
@@ -162,21 +163,19 @@ class MeshChatActivity : Activity() {
         chatHeading.addView(uiText("END-TO-END ENCRYPTED", 9f, 0xFF45E0B1.toInt(), true))
         root.addView(chatHeading, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(5) })
 
-        transcript = uiText(
-            "Your private conversation appears here.\n\nConnect with a trusted VANTA phone to begin.",
-            14f, 0xFFDCE8F5.toInt(), false
-        ).apply {
-            setPadding(dp(14), dp(16), dp(14), dp(16))
-            gravity = Gravity.BOTTOM
-            setLineSpacing(dp(4).toFloat(), 1f)
+        transcript = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
         }
         val transcriptCard = uiCard(0xFF0D1621, 0xFF1C2D3D)
         transcriptCard.addView(transcript)
-        val scroll = ScrollView(this).apply {
+        chatScroll = ScrollView(this).apply {
             isFillViewport = true
+            clipToPadding = false
             addView(transcriptCard, ScrollView.LayoutParams(-1, -1))
         }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(chatScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        appendMessageBubble("VANTA", "Your private conversation appears here. Connect to a trusted phone to begin.", false)
 
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -259,6 +258,37 @@ class MeshChatActivity : Activity() {
         else refreshPeers()
     }
 
+
+    private fun appendMessageBubble(
+        sender: String,
+        message: String,
+        outgoing: Boolean,
+        timestamp: Long = System.currentTimeMillis()
+    ) {
+        val bubble = TextView(this).apply {
+            text = "\$sender  •  \${java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(timestamp))}\n\$message"
+            textSize = 13f
+            setTextColor(if (outgoing) 0xFF071722.toInt() else 0xFFDCE9F6.toInt())
+            setPadding(dp(13), dp(10), dp(13), dp(10))
+            maxWidth = (resources.displayMetrics.widthPixels * 0.76f).toInt()
+            setLineSpacing(dp(3).toFloat(), 1f)
+            background = uiBackground(
+                if (outgoing) 0xFF65DDF5.toInt() else 0xFF1A2A3B.toInt(),
+                if (outgoing) 0xFF65DDF5.toInt() else 0xFF2A4055.toInt(),
+                16
+            )
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = if (outgoing) Gravity.END else Gravity.START
+            setPadding(0, dp(4), 0, dp(4))
+            addView(bubble, LinearLayout.LayoutParams(-2, -2))
+        }
+        transcript.addView(row)
+        if (::chatScroll.isInitialized) {
+            chatScroll.post { chatScroll.fullScroll(android.view.View.FOCUS_DOWN) }
+        }
+    }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
 
@@ -415,10 +445,22 @@ Wi-Fi Direct is a nearby radio link, not a town-to-town radio. Longer-distance d
         val peer = activePeerAddress ?: selectedDevice()?.address ?: return
         activePeerAddress = peer
         val rows = store.history(peer)
-        transcript.text = if (rows.isEmpty()) "No messages yet. Messages are encrypted on this device."
-            else rows.joinToString("\n") {
-                "${if (it.outgoing) "You" else "Peer"}: ${if (it.text.startsWith("VOICE1:")) "[voice note]" else it.text}${if (it.outgoing && !it.delivered) "  • queued" else ""}"
+        transcript.removeAllViews()
+        if (rows.isEmpty()) {
+            appendMessageBubble("VANTA", "No messages yet. Your messages are encrypted on this device.", false)
+        } else {
+            rows.forEach { row ->
+                val body = if (row.text.startsWith("VOICE1:")) "♫  Voice note" else row.text
+                val queued = row.outgoing && !row.delivered
+                appendMessageBubble(
+                    if (row.outgoing) "YOU" else "PEER",
+                    body + if (queued) "\nQueued for delivery" else "",
+                    row.outgoing,
+                    row.createdAt
+                )
             }
+        }
+        chatScroll.post { chatScroll.fullScroll(android.view.View.FOCUS_DOWN) }
     }
 
     private fun startServer() {
@@ -734,8 +776,11 @@ Wi-Fi Direct is a nearby radio link, not a town-to-town radio. Longer-distance d
                 store.addRelayPacket(ackId, senderFingerprint, ackEnvelope, 0, ackExpiry)
                 main.post {
                     status.text = "Encrypted mesh message received from $senderFingerprint • receipt queued"
-                    transcript.append("\n\nMesh from $senderFingerprint: " +
-                        if (message.startsWith("VOICE1:")) "Voice note received" else message)
+                    appendMessageBubble(
+                        "MESH • $senderFingerprint",
+                        if (message.startsWith("VOICE1:")) "♫  Voice note received" else message,
+                        false
+                    )
                 }
                 flushRelayPackets()
             }
