@@ -3,60 +3,55 @@
 **Powered by JUSU tech team**
 
 ## Before you start
-- Install VANTA MESH on both Android phones.
-- Turn Bluetooth on for both phones and pair them in Android Settings → Bluetooth for the Bluetooth option.
-- For Wi-Fi Direct, turn Wi-Fi on on both phones; a router, mobile data plan, and Internet connection are not needed.
-- Keep both phones within direct radio range.
+- Install VANTA MESH on each participating Android phone.
+- Bluetooth: pair phones in Android Settings → Bluetooth.
+- Wi-Fi Direct: turn Wi-Fi on; no router, mobile data, or Internet hotspot is needed.
 - Keep VANTA open while connecting and exchanging messages.
 
-## Connect two phones
-1. On the receiving phone, open VANTA MESH.
-2. Tap **MAKE THIS PHONE DISCOVERABLE** and accept Android's visibility prompt.
-3. Leave VANTA open on the receiving phone.
-4. On the sending phone, choose the receiving phone from the paired-device list.
-5. Tap **CONNECT TO PAIRED DEVICE**.
-6. On first contact, compare the peer fingerprint displayed by the two phones using a trusted separate channel (for example, compare it in person).
-7. Accept the new peer only when the fingerprints match. If they do not match, reject the connection.
-8. Wait for **END-TO-END ENCRYPTED** to appear.
+## Direct Bluetooth chat
+1. On the receiving phone, open VANTA MESH and tap **MAKE THIS PHONE DISCOVERABLE**.
+2. On the other phone, choose the receiving phone from the paired-device list.
+3. Tap **CONNECT TO PAIRED DEVICE**.
+4. On first contact, compare the peer fingerprint using a trusted separate channel. Accept only if it matches.
+5. Wait for **END-TO-END ENCRYPTED**, then send messages.
 
-## Use Wi-Fi Direct (offline)
-1. Turn Wi-Fi on on both phones. Do not connect to a router or Internet hotspot for this feature.
+## Direct Wi-Fi Direct chat
+1. Turn Wi-Fi on on both phones.
 2. Tap **DISCOVER NEARBY WI-FI DIRECT PHONES** on both phones.
-3. On one phone, select the other phone from the Wi-Fi Direct list and tap **CONNECT OVER WI-FI DIRECT**.
-4. Grant Nearby Wi-Fi devices permission on Android 13+ or Location permission on older Android versions. Some Android versions also require Location services to be enabled for peer discovery.
-5. Compare and verify the peer fingerprint before accepting the first connection.
-6. Wi-Fi Direct is a local peer-to-peer radio link; it does not provide town-to-town reach by itself.
+3. Select the other phone and tap **CONNECT OVER WI-FI DIRECT**.
+4. Grant Nearby Wi-Fi devices permission on Android 13+ or Location permission on older Android versions. Some versions also require Location services enabled for discovery.
+5. Verify the peer fingerprint on first contact.
+6. Wi-Fi Direct is a local radio link; it does not by itself reach another town.
 
-## Send text and voice notes
-1. Type in the message field and tap **SEND / QUEUE MESSAGE** to send text.
-2. To record audio, tap **RECORD VOICE NOTE (MAX 20 SEC)**, speak, then tap **STOP & SEND VOICE NOTE**.
-3. Voice notes are recorded as AAC, encrypted before storage/transmission, and limited to 20 seconds and 256 KB.
-4. Tap **PLAY LAST VOICE NOTE** to play the most recent voice note saved in this conversation.
-5. Text and voice notes can be queued locally while disconnected and sent when a secure direct link is active.
-6. Keep both phones and VANTA open while sending and receiving.
+## Send through the offline mesh
+1. Connect to and fingerprint-verify the intended recipient at least once. This saves the recipient's public identity as a trusted peer.
+2. Type your message and tap **SEND VIA OFFLINE MESH**.
+3. Choose the intended recipient fingerprint. VANTA encrypts the message for that recipient and signs it with your identity.
+4. Connect to a nearby participating VANTA phone. The relay phone stores the encrypted packet without reading its contents.
+5. When that relay phone later connects to another VANTA phone, it forwards queued packets. Repeat this process across participating phones until the recipient connects.
+6. The recipient checks the sender fingerprint before accepting the message. A signed delivery receipt can travel back through the same relay chain.
 
-## Security and privacy
-- Message contents are encrypted between the two paired VANTA identities using an ECDH-derived AES-GCM session key.
-- Local conversation history and the local private identity key are encrypted using an Android Keystore-protected key.
-- First-time peer fingerprints must be checked out-of-band. Do not approve an unknown or unexpected identity.
-- Pairing in Android Bluetooth settings is required.
-- The app does not use mobile data, Internet endpoints, cloud services, or a central server. Android requires the INTERNET manifest permission for local TCP sockets used by Wi-Fi Direct; VANTA uses that socket only on the local Wi-Fi Direct peer link.
-- The app does not request notification-listener, accessibility, or device-administrator permissions.
+**Important:** each hop requires two VANTA phones to physically come within Bluetooth or Wi-Fi Direct range. This can extend delivery across multiple hops, but it cannot guarantee town-to-town delivery without a continuous chain of participating phones. Keep VANTA open and manually connect each hop; background relay and automatic routing are not yet available.
 
-## Troubleshooting
-| Problem | What to do |
-|---|---|
-| No paired devices listed | Pair the phones in Android Settings → Bluetooth, then reopen VANTA. |
-| Receiver is not found | Tap **MAKE THIS PHONE DISCOVERABLE** on the receiving phone and keep VANTA open. |
-| Connection fails | Check Bluetooth is on for both phones, confirm pairing, move closer, and retry. |
-| Permission prompt appears | Allow the requested Nearby devices, Bluetooth, microphone, or Wi-Fi Direct discovery permissions. |
-| Peer fingerprint changed | Reject the connection until you have independently verified the peer identity. |
-| Message remains queued | Reconnect to the same peer, accept only its verified identity, and keep both app screens open. |
+Packets expire after 7 days and are limited to 8 relay hops. Relay metadata is visible to participating phones, but the message body is encrypted for the intended recipient.
 
-## Current release limitations
-- Direct one-to-one Bluetooth and Wi-Fi Direct chat, plus encrypted voice notes.
-- No multi-hop store-and-forward relay, group chat, photo/file attachments, or typing/read receipts.
-- Background listening and automatic reconnection are not implemented; keep VANTA open while connecting and exchanging messages.
-- Bluetooth availability and behavior depend on the Android device and OS version.
+## Voice notes
+1. Tap **RECORD VOICE NOTE (MAX 20 SEC)** and speak.
+2. Tap **STOP & SEND VOICE NOTE**.
+3. Voice notes use AAC and are limited to 20 seconds / 256 KB.
+4. Tap **PLAY LAST VOICE NOTE** to play the most recent voice note in the active direct conversation.
+5. Voice notes are encrypted locally and in transit. The current voice-note send path is direct; mesh relay currently carries text messages.
 
-**Important:** CI success means the APK compiled. It does not replace real two-phone testing of Bluetooth behavior.
+## Privacy and permissions
+- Message content and relay packets are encrypted at rest with an Android Keystore-protected key.
+- Direct sessions use ECDH-derived AES-GCM encryption. Mesh envelopes use recipient encryption plus an origin signature.
+- Verify every new sender fingerprint out-of-band before accepting their messages.
+- VANTA does not use mobile data, Internet endpoints, cloud services, FCM, or a central server.
+- Android requires the INTERNET manifest permission for the local TCP socket used by Wi-Fi Direct. VANTA uses it only for local peer-to-peer connections.
+- Permissions: Bluetooth/Nearby Devices, Wi-Fi discovery permission, microphone only for recording, and notifications for local alerts.
+
+## Current limitations
+- Multi-hop relaying is manual: users must keep VANTA open and connect each hop.
+- No background listening, automatic reconnect, automatic routing, group chat, or file attachments.
+- Wi-Fi Direct and Bluetooth range depend on device hardware and environment.
+- CI success confirms compilation, not real-world delivery. Test with at least three physical phones for mesh relay.
