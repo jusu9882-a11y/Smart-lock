@@ -561,11 +561,30 @@ This release supports direct Bluetooth and Wi-Fi Direct chat plus encrypted voic
         val senderFingerprint = security.fingerprint(senderPublic)
         val localFingerprint = security.fingerprint(security.publicIdentity())
         if (recipient == localFingerprint) {
+            val senderEncoded = parts[3]
+            val trustedSender = peerPrefs.all.values.any { it == senderEncoded }
+            if (!trustedSender) {
+                main.post {
+                    AlertDialog.Builder(this)
+                        .setTitle("Verify mesh message sender")
+                        .setMessage("Sender fingerprint:\n\n$senderFingerprint\n\nCompare this fingerprint with the sender through a trusted separate channel before accepting the message.")
+                        .setCancelable(false)
+                        .setNegativeButton("REJECT") { _, _ -> store.removeRelayPacket(id) }
+                        .setPositiveButton("I VERIFIED THIS SENDER") { _, _ ->
+                            peerPrefs.edit().putString("mesh:$senderFingerprint", senderEncoded).apply()
+                            receiveRelayFrame(encodedEnvelope)
+                        }
+                        .show()
+                }
+                return
+            }
             val plaintext = security.decryptFromPeer(senderPublic, cipher)
             val message = String(plaintext, Charsets.UTF_8)
             store.removeRelayPacket(id)
             if (message.startsWith("ACK:")) {
-                store.markDelivered(message.removePrefix("ACK:"))
+                val originalId = message.removePrefix("ACK:")
+                store.markDelivered(originalId)
+                store.removeRelayPacket(originalId)
                 main.post {
                     status.text = "Mesh delivery confirmed by recipient"
                     refreshHistory()
@@ -580,8 +599,9 @@ This release supports direct Bluetooth and Wi-Fi Direct chat plus encrypted voic
                 )
                 store.addRelayPacket(ackId, senderFingerprint, ackEnvelope, 0, ackExpiry)
                 main.post {
-                    status.text = "Encrypted mesh message received • delivery receipt queued"
-                    refreshHistory()
+                    status.text = "Encrypted mesh message received from $senderFingerprint • receipt queued"
+                    transcript.append("\n\nMesh from $senderFingerprint: " +
+                        if (message.startsWith("VOICE1:")) "Voice note received" else message)
                 }
                 flushRelayPackets()
             }
