@@ -6,6 +6,9 @@ import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
+import android.net.wifi.p2p.WifiP2pDevice
+import java.io.InputStream
+import java.io.OutputStream
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -35,6 +38,11 @@ class MeshChatActivity : Activity() {
     private lateinit var transcript: TextView
     private lateinit var input: EditText
     private lateinit var peers: Spinner
+    private lateinit var wifiPeers: Spinner
+    private lateinit var wifiTransport: WifiDirectTransport
+    private var discoveredWifiPeers: List<WifiP2pDevice> = emptyList()
+    @Volatile private var activeConnectionId: String? = null
+    @Volatile private var activeClose: (() -> Unit)? = null
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var server: BluetoothServerSocket? = null
     @Volatile private var writer: PrintWriter? = null
@@ -49,7 +57,7 @@ class MeshChatActivity : Activity() {
             checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun requestBluetoothPermissions() {
+    private fun hasWifiPermission(): Boolean = if (Build.VERSION.SDK_INT >= 33)\n        checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED\n    else checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED\n\n    private fun requestWifiPermission() {\n        val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES\n            else Manifest.permission.ACCESS_FINE_LOCATION\n        ActivityCompat.requestPermissions(this, arrayOf(permission), 43)\n    }\n\n    private fun requestBluetoothPermissions() {
         if (Build.VERSION.SDK_INT >= 31) ActivityCompat.requestPermissions(
             this, arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_ADVERTISE), 41
@@ -172,7 +180,7 @@ This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+        if (requestCode == 43) {\n            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) wifiTransport.startDiscovery()\n            else status.text = "Nearby Wi-Fi permission is required for Wi-Fi Direct discovery."\n        } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             refreshPeers()
             status.text = "Bluetooth permissions granted. Pair devices in Android settings."
         } else status.text = "Bluetooth permissions are required for nearby chat."
@@ -243,33 +251,47 @@ This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh
     }
 
     @Synchronized private fun attach(connected: BluetoothSocket) {
+        attachStreams(connected.inputStream, connected.outputStream, { connected.close() }, connected.remoteDevice.address, connected)
+    }
+
+    @Synchronized private fun attachStreams(
+        input: InputStream, output: OutputStream, close: () -> Unit, peer: String,
+        bluetoothSocket: BluetoothSocket? = null
+    ) {
+        try { activeClose?.invoke() } catch (_: Exception) {}
         try { socket?.close() } catch (_: Exception) {}
-        socket = connected
-        writer = PrintWriter(connected.outputStream, true)
+        socket = bluetoothSocket
+        activeClose = close
+        val connectionId = UUID.randomUUID().toString()
+        activeConnectionId = connectionId
+        writer = PrintWriter(output, true)
         sessionKey = null
-        val address = connected.remoteDevice.address
+        val address = peer
         activePeerAddress = address
         sendFrame("HELLO:" + android.util.Base64.encodeToString(security.publicIdentity(), android.util.Base64.NO_WRAP))
         main.post {
-            status.text = "Bluetooth linked • negotiating encrypted session…"
+            status.text = "Offline link connected • negotiating encrypted session…"
             refreshHistory()
         }
         thread(name = "vanta-mesh-reader") {
             try {
-                val reader = BufferedReader(InputStreamReader(connected.inputStream, Charsets.UTF_8))
+                val reader = BufferedReader(InputStreamReader(input, Charsets.UTF_8))
                 while (true) {
                     val line = reader.readLine() ?: break
-                    handleFrame(connected, address, line)
+                    handleFrame(bluetoothSocket, address, line)
                 }
             } catch (e: Exception) {
                 main.post { status.text = "Secure connection ended: ${e.message ?: "link closed"}" }
             }
             main.post {
-                if (socket === connected) {
+                if (activeConnectionId == connectionId) {
                     status.text = "DISCONNECTED • queued messages are saved"
                     socket = null
                     writer = null
                     sessionKey = null
+                    activeConnectionId = null
+                    activeClose = null
+                    try { close() } catch (_: Exception) {}
                 }
             }
         }
@@ -283,7 +305,7 @@ This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh
         }
     }
 
-    private fun handleFrame(connected: BluetoothSocket, address: String, line: String) {
+    private fun handleFrame(connected: BluetoothSocket?, address: String, line: String) {
         when {
             line.startsWith("HELLO:") -> {
                 val encoded = line.removePrefix("HELLO:")
@@ -294,7 +316,7 @@ This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh
                     if (saved != encoded) {
                         main.post {
                             status.text = "SECURITY ALERT • peer identity changed. Connection rejected."
-                            try { connected.close() } catch (_: Exception) {}
+                            try { connected?.close() } catch (_: Exception) {}
                         }
                         return
                     }
@@ -305,7 +327,7 @@ This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh
                             .setTitle("Verify new VANTA peer")
                             .setMessage("Peer fingerprint:\n\n$fingerprint\n\nCompare this fingerprint with the other phone through a trusted channel before accepting.")
                             .setCancelable(false)
-                            .setNegativeButton("REJECT") { _, _ -> try { connected.close() } catch (_: Exception) {} }
+                            .setNegativeButton("REJECT") { _, _ -> try { connected?.close() } catch (_: Exception) {} }
                             .setPositiveButton("I VERIFIED THIS DEVICE") { _, _ ->
                                 peerPrefs.edit().putString(address, encoded).apply()
                                 establishSession(publicKey, address, fingerprint)
