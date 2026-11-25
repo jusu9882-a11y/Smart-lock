@@ -6,6 +6,8 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.util.UUID
 
+data class StoredRelayPacket(val id: String, val recipient: String, val envelope: String, val hops: Int, val expiresAt: Long)
+
 data class StoredChatMessage(
     val id: String,
     val peer: String,
@@ -17,7 +19,7 @@ data class StoredChatMessage(
 
 /** Encrypted-at-rest conversation history and durable outgoing queue. */
 class ChatStore(context: Context, private val security: ChatSecurity) :
-    SQLiteOpenHelper(context, "vanta_mesh.db", null, 1) {
+    SQLiteOpenHelper(context, "vanta_mesh.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
@@ -32,10 +34,66 @@ class ChatStore(context: Context, private val security: ChatSecurity) :
         """.trimIndent())
         db.execSQL("CREATE INDEX messages_peer_time ON messages(peer, created_at)")
         db.execSQL("CREATE INDEX messages_outbox ON messages(peer, outgoing, delivered)")
+        createRelayTable(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Versioned migrations will be added before any schema change is shipped.
+        if (oldVersion < 2) createRelayTable(db)
+    }
+
+    private fun createRelayTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS relay_packets (
+                id TEXT PRIMARY KEY NOT NULL,
+                recipient TEXT NOT NULL,
+                envelope BLOB NOT NULL,
+                hops INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS relay_expiry ON relay_packets(expires_at, hops)")
+    }
+
+    @Synchronized
+    fun addRelayPacket(id: String, recipient: String, envelope: String, hops: Int, expiresAt: Long): Boolean {
+        val values = ContentValues().apply {
+            put("id", id)
+            put("recipient", recipient)
+            put("envelope", security.encryptAtRest(envelope.toByteArray(Charsets.UTF_8)))
+            put("hops", hops)
+            put("expires_at", expiresAt)
+            put("created_at", System.currentTimeMillis())
+        }
+        return writableDatabase.insertWithOnConflict(
+            "relay_packets", null, values, SQLiteDatabase.CONFLICT_IGNORE
+        ) != -1L
+    }
+
+    @Synchronized
+    fun pendingRelay(limit: Int = 200): List<StoredRelayPacket> {
+        val now = System.currentTimeMillis()
+        writableDatabase.delete("relay_packets", "expires_at <= ?", arrayOf(now.toString()))
+        val packets = ArrayList<StoredRelayPacket>()
+        readableDatabase.query(
+            "relay_packets", arrayOf("id", "recipient", "envelope", "hops", "expires_at"),
+            "expires_at > ? AND hops <= 8", arrayOf(now.toString()),
+            null, null, "created_at ASC", limit.coerceIn(1, 500).toString()
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val plain = security.decryptAtRest(cursor.getBlob(2))
+                packets.add(StoredRelayPacket(
+                    cursor.getString(0), cursor.getString(1),
+                    String(plain, Charsets.UTF_8), cursor.getInt(3), cursor.getLong(4)
+                ))
+            }
+        }
+        return packets
+    }
+
+    @Synchronized
+    fun removeRelayPacket(id: String) {
+        writableDatabase.delete("relay_packets", "id = ?", arrayOf(id))
     }
 
     @Synchronized
