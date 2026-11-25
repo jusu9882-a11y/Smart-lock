@@ -71,6 +71,9 @@ class MeshChatActivity : Activity() {
         root.addView(label("OFFLINE CHAT • E2E ENCRYPTED • NO ACCOUNT", 11f, 0xFF8294AA.toInt()))
         status = label("Checking Bluetooth…", 12f)
         root.addView(status)
+        val help = Button(this).apply { text = "HELP / HOW TO USE VANTA" }
+        root.addView(help)
+        help.setOnClickListener { showHelp() }
         val discover = Button(this).apply { text = "MAKE THIS PHONE DISCOVERABLE" }
         root.addView(discover)
         peers = Spinner(this)
@@ -106,6 +109,61 @@ class MeshChatActivity : Activity() {
         if (adapter == null) status.text = "This phone does not support Bluetooth."
         else if (!hasBluetoothPermissions()) requestBluetoothPermissions()
         else refreshPeers()
+    }
+
+
+    private fun showHelp() {
+        val guide = """
+VANTA MESH — QUICK START
+
+WHAT YOU NEED
+• Two Android phones with Bluetooth.
+• VANTA installed on both phones.
+• Pair the phones first in Android Settings > Bluetooth.
+• Keep VANTA open during a chat. Background delivery is not supported yet.
+
+CONNECT THE PHONES
+1. Turn Bluetooth on on both phones.
+2. On the receiving phone, open VANTA and tap MAKE THIS PHONE DISCOVERABLE. Accept Android's visibility prompt.
+3. On the other phone, choose the receiving phone from the paired-device list.
+4. Tap CONNECT TO PAIRED DEVICE.
+5. On first contact, compare the fingerprint shown in VANTA on both phones using a trusted separate channel. Accept only if they match.
+6. Repeat the trust confirmation on the other phone if prompted. The status should say END-TO-END ENCRYPTED.
+
+SEND A MESSAGE
+• Type in the message field and tap SEND / QUEUE MESSAGE.
+• Messages send when a secure Bluetooth session is active.
+• If disconnected, outgoing messages are saved encrypted on this phone and queued for the next connection.
+• A delivered acknowledgement removes the queued status.
+
+HISTORY & PRIVACY
+• Conversation history is encrypted on this phone and remains after app restart.
+• The app does not need mobile data, Wi-Fi internet, an account, or a cloud server.
+• Your Bluetooth devices must be paired in Android settings.
+• Never approve a new peer unless you have compared its fingerprint with the other phone.
+
+TROUBLESHOOTING
+• No devices listed: pair the phones in Android Bluetooth settings, then reopen VANTA.
+• Cannot connect: enable Bluetooth on both phones, make the receiver discoverable, and retry.
+• Permissions denied: allow Nearby devices / Bluetooth permissions in Android app settings.
+• Peer identity changed: stop and verify the device identity. Do not accept an unexpected change.
+• Messages remain queued: reconnect to the same trusted peer and keep both VANTA screens open.
+
+CURRENT LIMITATIONS
+This release supports direct one-to-one Bluetooth text chat only. Multi-hop mesh relay, group chats, photos, files, voice messages, automatic background delivery, and automatic reconnection are not available yet.
+        """.trimIndent()
+        val body = TextView(this).apply {
+            text = guide
+            textSize = 15f
+            setTextColor(0xFFE7F2FF.toInt())
+            setPadding(24, 12, 24, 12)
+        }
+        val scroll = ScrollView(this).apply { addView(body) }
+        AlertDialog.Builder(this)
+            .setTitle("VANTA MESH — Help")
+            .setView(scroll)
+            .setPositiveButton("GOT IT", null)
+            .show()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
