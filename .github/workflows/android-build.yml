@@ -1,7 +1,7 @@
 name: Android debug build
 on:
   push:
-    branches: [ main, feature/vanta-mesh-offline-chat ]
+    branches: [ main, feature/vanta-mesh-offline-chat, feature/vanta-chat-only ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
