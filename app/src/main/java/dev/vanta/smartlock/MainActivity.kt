@@ -169,7 +169,7 @@ private fun VantaHome(authenticated: Boolean, onAuthenticate: () -> Unit, onLock
             Spacer(Modifier.height(8.dp))
             Button(onClick = onLockDevice) { Text(if (deviceAdminActive) "LOCK DEVICE NOW" else "ENABLE SYSTEM LOCK") }
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { context.startActivity(android.content.Intent(context, MessageVaultActivity::class.java)) }) { Text("WHATSAPP MODE") }
+            Button(onClick = { context.startActivity(android.content.Intent(context, MessageVaultActivity::class.java)) }) { Text("WHATSAPP MODE") }\n            Spacer(Modifier.height(8.dp))\n            Button(onClick = { context.startActivity(android.content.Intent(context, MeshChatActivity::class.java)) }) { Text("VANTA MESH / OFFLINE CHAT") }
             Spacer(Modifier.height(8.dp))
             Button(onClick = { context.startActivity(android.content.Intent(context, AppGuardActivity::class.java)) }) { Text("VOID APP GUARD") }
             Spacer(Modifier.height(12.dp))
