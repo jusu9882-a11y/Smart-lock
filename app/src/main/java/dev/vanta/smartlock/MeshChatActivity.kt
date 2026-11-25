@@ -490,11 +490,23 @@ Wi-Fi Direct is a nearby radio link, not a town-to-town radio. Longer-distance d
         refreshHistory()
         status.text = "Connecting to ${device.name ?: device.address}…"
         thread(name = "vanta-mesh-connect") {
-            try {
-                adapter?.cancelDiscovery()
-                attach(device.createRfcommSocketToServiceRecord(uuid).also { it.connect() })
-            } catch (e: Exception) {
-                main.post { status.text = "Connection failed: ${e.message ?: "Check pairing and retry"}" }
+            var lastError: Exception? = null
+            repeat(3) { attempt ->
+                var candidate: BluetoothSocket? = null
+                try {
+                    adapter?.cancelDiscovery()
+                    candidate = device.createRfcommSocketToServiceRecord(uuid)
+                    candidate.connect()
+                    attach(candidate)
+                    return@thread
+                } catch (e: Exception) {
+                    lastError = e
+                    try { candidate?.close() } catch (_: Exception) {}
+                    if (attempt < 2) Thread.sleep(1_000)
+                }
+            }
+            main.post {
+                status.text = "Bluetooth connection failed after 3 attempts: ${lastError?.message ?: "Check pairing, visibility and retry"}"
             }
         }
     }
