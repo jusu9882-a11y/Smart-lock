@@ -125,6 +125,8 @@ class MeshChatActivity : Activity() {
         root.addView(input)
         val send = Button(this).apply { text = "SEND / QUEUE MESSAGE" }
         root.addView(send)
+        val meshSend = Button(this).apply { text = "SEND VIA OFFLINE MESH" }
+        root.addView(meshSend)
         voiceButton = Button(this).apply { text = "RECORD VOICE NOTE (MAX 20 SEC)" }
         root.addView(voiceButton)
         val playVoice = Button(this).apply { text = "PLAY LAST VOICE NOTE" }
@@ -166,6 +168,7 @@ class MeshChatActivity : Activity() {
                 ?: run { status.text = "Discover nearby Wi-Fi Direct phones first." }
         }
         send.setOnClickListener { sendMessage() }
+        meshSend.setOnClickListener { sendMeshMessage() }
         voiceButton.setOnClickListener { if (recorder == null) startVoiceRecording() else stopVoiceRecording() }
         playVoice.setOnClickListener { playLastVoiceNote() }
         if (adapter == null) status.text = "This phone does not support Bluetooth."
@@ -424,6 +427,7 @@ This release supports direct Bluetooth and Wi-Fi Direct chat plus encrypted voic
                 store.markDelivered(line.removePrefix("ACK:"))
                 main.post { refreshHistory() }
             }
+            line.startsWith("RLY:") -> receiveRelayFrame(line.removePrefix("RLY:"))
             else -> throw IllegalArgumentException("Unknown VANTA protocol frame")
         }
     }
@@ -435,6 +439,23 @@ This release supports direct Bluetooth and Wi-Fi Direct chat plus encrypted voic
             status.text = "END-TO-END ENCRYPTED • peer $fingerprint"
             refreshHistory()
             flushPending()
+            flushRelayPackets()
+        }
+    }
+
+    private fun flushRelayPackets() {
+        if (sessionKey == null) return
+        thread(name = "vanta-mesh-relay-outbox") {
+            try {
+                for (packet in store.pendingRelay()) {
+                    val encoded = android.util.Base64.encodeToString(
+                        packet.envelope.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP
+                    )
+                    sendFrame("RLY:$encoded")
+                }
+            } catch (e: Exception) {
+                main.post { status.text = "Mesh relay paused • @{e.message ?: "connection issue"}" }
+            }
         }
     }
 
@@ -450,6 +471,126 @@ This release supports direct Bluetooth and Wi-Fi Direct chat plus encrypted voic
                 }
             } catch (e: Exception) {
                 main.post { status.text = "Outbox paused • ${e.message ?: "connection issue"}" }
+            }
+        }
+    }
+
+    private fun sendMeshMessage() {
+        val message = input.text.toString().trim()
+        if (message.isEmpty()) {
+            status.text = "Write a message first, then choose SEND VIA OFFLINE MESH."
+            return
+        }
+        val known = peerPrefs.all.values.mapNotNull { value ->
+            val encoded = value as? String ?: return@mapNotNull null
+            try {
+                val publicKey = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                publicKey to security.fingerprint(publicKey)
+            } catch (_: Exception) { null }
+        }.distinctBy { it.second }
+        if (known.isEmpty()) {
+            status.text = "No trusted mesh recipients yet. Connect to and verify a VANTA peer first."
+            return
+        }
+        val labels = known.map { "VANTA peer • ${it.second}" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Choose trusted mesh recipient")
+            .setItems(labels) { _, which ->
+                val (recipientPublic, recipientFingerprint) = known[which]
+                try {
+                    val id = store.add(recipientFingerprint, message, true)
+                    val expiry = System.currentTimeMillis() + 7L * 24L * 60L * 60L * 1000L
+                    val envelope = createRelayEnvelope(
+                        id, recipientFingerprint, recipientPublic, message.toByteArray(Charsets.UTF_8), expiry, 0
+                    )
+                    store.addRelayPacket(id, recipientFingerprint, envelope, 0, expiry)
+                    input.setText("")
+                    status.text = "Encrypted for ${recipientFingerprint} • waiting for a VANTA relay path"
+                    flushRelayPackets()
+                } catch (e: Exception) {
+                    status.text = "Could not queue mesh message: ${e.message ?: "security error"}"
+                }
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun createRelayEnvelope(
+        id: String,
+        recipientFingerprint: String,
+        recipientPublic: ByteArray,
+        plaintext: ByteArray,
+        expiresAt: Long,
+        hops: Int
+    ): String {
+        val senderPublic = security.publicIdentity()
+        val senderEncoded = android.util.Base64.encodeToString(senderPublic, android.util.Base64.NO_WRAP)
+        val cipherEncoded = android.util.Base64.encodeToString(
+            security.encryptForPeer(recipientPublic, plaintext), android.util.Base64.NO_WRAP
+        )
+        val unsigned = listOf(
+            "VANTA-RELAY-1", id, recipientFingerprint, senderEncoded, expiresAt.toString(), cipherEncoded
+        ).joinToString("|")
+        val signature = android.util.Base64.encodeToString(
+            security.sign(unsigned.toByteArray(Charsets.UTF_8)), android.util.Base64.NO_WRAP
+        )
+        return "$unsigned|$signature|$hops"
+    }
+
+    private fun receiveRelayFrame(encodedEnvelope: String) {
+        val envelope = String(
+            android.util.Base64.decode(encodedEnvelope, android.util.Base64.DEFAULT), Charsets.UTF_8
+        )
+        val parts = envelope.split("|")
+        if (parts.size != 8 || parts[0] != "VANTA-RELAY-1") {
+            throw IllegalArgumentException("Malformed mesh relay envelope")
+        }
+        val id = parts[1]
+        val recipient = parts[2]
+        val senderPublic = android.util.Base64.decode(parts[3], android.util.Base64.DEFAULT)
+        val expiry = parts[4].toLongOrNull() ?: throw IllegalArgumentException("Invalid relay expiry")
+        val cipher = android.util.Base64.decode(parts[5], android.util.Base64.DEFAULT)
+        val signature = android.util.Base64.decode(parts[6], android.util.Base64.DEFAULT)
+        val hops = parts[7].toIntOrNull() ?: throw IllegalArgumentException("Invalid relay hop count")
+        if (expiry <= System.currentTimeMillis() || hops !in 0..8) return
+        val signedContent = parts.take(6).joinToString("|")
+        if (!security.verify(senderPublic, signedContent.toByteArray(Charsets.UTF_8), signature)) {
+            throw SecurityException("Mesh sender signature is invalid")
+        }
+
+        val senderFingerprint = security.fingerprint(senderPublic)
+        val localFingerprint = security.fingerprint(security.publicIdentity())
+        if (recipient == localFingerprint) {
+            val plaintext = security.decryptFromPeer(senderPublic, cipher)
+            val message = String(plaintext, Charsets.UTF_8)
+            store.removeRelayPacket(id)
+            if (message.startsWith("ACK:")) {
+                store.markDelivered(message.removePrefix("ACK:"))
+                main.post {
+                    status.text = "Mesh delivery confirmed by recipient"
+                    refreshHistory()
+                }
+            } else {
+                store.addIncoming(id, senderFingerprint, message)
+                VantaNotifications.showMessage(this, senderFingerprint)
+                val ackId = UUID.randomUUID().toString()
+                val ackExpiry = System.currentTimeMillis() + 7L * 24L * 60L * 60L * 1000L
+                val ackEnvelope = createRelayEnvelope(
+                    ackId, senderFingerprint, senderPublic, "ACK:$id".toByteArray(Charsets.UTF_8), ackExpiry, 0
+                )
+                store.addRelayPacket(ackId, senderFingerprint, ackEnvelope, 0, ackExpiry)
+                main.post {
+                    status.text = "Encrypted mesh message received • delivery receipt queued"
+                    refreshHistory()
+                }
+                flushRelayPackets()
+            }
+        } else if (hops < 8) {
+            val nextHops = hops + 1
+            val forwarded = parts.take(7).joinToString("|") + "|$nextHops"
+            val added = store.addRelayPacket(id, recipient, forwarded, nextHops, expiry)
+            if (added) main.post {
+                status.text = "Encrypted message stored • will relay when another VANTA phone connects"
             }
         }
     }
