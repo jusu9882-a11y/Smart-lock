@@ -10,6 +10,7 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
@@ -131,4 +132,34 @@ class ChatSecurity(context: Context) {
         cipher.updateAAD(aad)
         return cipher.doFinal(encrypted.copyOfRange(12, encrypted.size))
     }
+
+    /** Encrypt for a known VANTA identity without requiring a live connection. */
+    fun encryptForPeer(peerPublicEncoded: ByteArray, plaintext: ByteArray): ByteArray =
+        encryptMessage(deriveSessionKey(peerPublicEncoded), plaintext)
+
+    /** Decrypt an opaque mesh envelope using the origin identity's public key. */
+    fun decryptFromPeer(senderPublicEncoded: ByteArray, ciphertext: ByteArray): ByteArray =
+        decryptMessage(deriveSessionKey(senderPublicEncoded), ciphertext)
+
+    /** Sign relay metadata so intermediate phones can verify the original sender. */
+    fun sign(data: ByteArray): ByteArray {
+        val signer = Signature.getInstance("SHA256withECDSA")
+        signer.initSign(identity().private)
+        signer.update(data)
+        return signer.sign()
+    }
+
+    fun verify(encodedPublicKey: ByteArray, data: ByteArray, signature: ByteArray): Boolean {
+        return try {
+            val publicKey = KeyFactory.getInstance("EC")
+                .generatePublic(X509EncodedKeySpec(encodedPublicKey))
+            val verifier = Signature.getInstance("SHA256withECDSA")
+            verifier.initVerify(publicKey)
+            verifier.update(data)
+            verifier.verify(signature)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
 }
