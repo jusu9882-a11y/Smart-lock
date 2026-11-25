@@ -52,7 +52,7 @@ class ChatStore(context: Context, private val security: ChatSecurity) :
         return id
     }
 
-    @Synchronized fun history(peer: String, limit: Int = 500): List<StoredChatMessage> {
+    @Synchronized fun addIncoming(id: String, peer: String, text: String) {\n        val values = ContentValues().apply {\n            put("id", id)\n            put("peer", peer)\n            put("body", security.encryptAtRest(text.toByteArray(Charsets.UTF_8)))\n            put("outgoing", 0)\n            put("delivered", 1)\n            put("created_at", System.currentTimeMillis())\n        }\n        writableDatabase.insertWithOnConflict("messages", null, values, SQLiteDatabase.CONFLICT_IGNORE)\n    }\n\n    @Synchronized fun history(peer: String, limit: Int = 500): List<StoredChatMessage> {
         val result = ArrayList<StoredChatMessage>()
         readableDatabase.query("messages", arrayOf("id", "peer", "body", "outgoing", "delivered", "created_at"),
             "peer = ?", arrayOf(peer), null, null, "created_at ASC", limit.coerceIn(1, 2000).toString()
