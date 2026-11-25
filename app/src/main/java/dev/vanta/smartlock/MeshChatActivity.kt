@@ -212,7 +212,7 @@ TROUBLESHOOTING
 • Messages remain queued: reconnect to the same trusted peer and keep both VANTA screens open.
 
 CURRENT LIMITATIONS
-This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi Direct works only when participating phones are physically nearby. Multi-hop relay, voice messages, and reliable background delivery are not available yet.
+This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi Direct works only when participating phones are physically nearby. Multi-hop relay and reliable background delivery are not available yet. Voice notes are recorded locally, encrypted, and sent over the selected direct connection (maximum 20 seconds).
         """.trimIndent()
         val body = TextView(this).apply {
             text = guide
@@ -230,7 +230,10 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 44) {\n            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startVoiceRecording()\n            else status.text = "Microphone permission is required to record voice notes."\n        } else if (requestCode == 43) {
+        if (requestCode == 44) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startVoiceRecording()
+            else status.text = "Microphone permission is required to record voice notes."
+        } else if (requestCode == 43) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) wifiTransport.startDiscovery()
             else status.text = "Nearby Wi-Fi permission is required for Wi-Fi Direct discovery."
         } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
@@ -364,7 +367,9 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
                 val encoded = line.removePrefix("HELLO:")
                 val publicKey = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
                 val fingerprint = security.fingerprint(publicKey)
-                val saved = peerPrefs.getString(address, null)
+                // Wi-Fi Direct addresses can change between groups; pin the cryptographic identity.
+                val peerKey = if (address.startsWith("wifi:")) "wifi:$fingerprint" else address
+                val saved = peerPrefs.getString(peerKey, null)
                 if (saved != null) {
                     if (saved != encoded) {
                         main.post {
@@ -373,7 +378,7 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
                         }
                         return
                     }
-                    establishSession(publicKey, address, fingerprint)
+                    establishSession(publicKey, peerKey, fingerprint)
                 } else {
                     main.post {
                         AlertDialog.Builder(this)
@@ -382,7 +387,7 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
                             .setCancelable(false)
                             .setNegativeButton("REJECT") { _, _ -> try { connected?.close() } catch (_: Exception) {} }
                             .setPositiveButton("I VERIFIED THIS DEVICE") { _, _ ->
-                                peerPrefs.edit().putString(address, encoded).apply()
+                                peerPrefs.edit().putString(peerKey, encoded).apply()
                                 establishSession(publicKey, address, fingerprint)
                             }.show()
                     }
@@ -396,7 +401,7 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
                 val cipherText = android.util.Base64.decode(parts[2], android.util.Base64.DEFAULT)
                 val plain = security.decryptMessage(key, cipherText)
                 val message = String(plain, Charsets.UTF_8)
-                store.addIncoming(id, address, message)
+                store.addIncoming(id, activePeerAddress ?: address, message)
                 VantaNotifications.showMessage(this, address)
                 sendFrame("ACK:$id")
                 main.post { refreshHistory() }
