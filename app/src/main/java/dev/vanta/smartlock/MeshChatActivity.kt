@@ -388,7 +388,7 @@ This release supports direct Bluetooth chat and direct Wi-Fi Direct chat. Wi-Fi 
                             .setNegativeButton("REJECT") { _, _ -> try { connected?.close() } catch (_: Exception) {} }
                             .setPositiveButton("I VERIFIED THIS DEVICE") { _, _ ->
                                 peerPrefs.edit().putString(peerKey, encoded).apply()
-                                establishSession(publicKey, address, fingerprint)
+                                establishSession(publicKey, peerKey, fingerprint)
                             }.show()
                     }
                 }
