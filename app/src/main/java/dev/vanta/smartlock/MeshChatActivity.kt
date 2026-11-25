@@ -153,7 +153,7 @@ class MeshChatActivity : Activity() {
                     ?: throw IllegalStateException("Bluetooth adapter unavailable")
                 server = listening
                 main.post { status.text = "Discoverable • waiting for a paired VANTA peer…" }
-                while (!isFinishing && !listening.isClosed) {
+                while (!isFinishing) {
                     val incoming = listening.accept() ?: break
                     attach(incoming)
                 }
