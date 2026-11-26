@@ -165,7 +165,7 @@ internal class WifiDirectTransport(
         if (info.isGroupOwner) {
             thread(name = "vanta-wifi-direct-server") {
                 try {
-                    val localP2pAddress = findP2pInterfaceAddress()
+                    val localP2pAddress = awaitP2pInterfaceAddress()
                         ?: error("Wi-Fi Direct interface address is not ready.")
                     val server = ServerSocket()
                     server.reuseAddress = true
@@ -213,6 +213,15 @@ internal class WifiDirectTransport(
                 report("Wi-Fi Direct socket failed: ${lastError?.message ?: "connection timeout"}")
             }
         }
+    }
+
+    private fun awaitP2pInterfaceAddress(): Inet4Address? {
+        repeat(20) {
+            findP2pInterfaceAddress()?.let { return it }
+            if (closed) return null
+            try { Thread.sleep(250L) } catch (_: InterruptedException) { return null }
+        }
+        return null
     }
 
     private fun findP2pInterfaceAddress(): Inet4Address? {
