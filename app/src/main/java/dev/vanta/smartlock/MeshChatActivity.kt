@@ -58,9 +58,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private val airWaveDetector by lazy {
         AirWaveMotionDetector(onWave = {
             if (airWaveArmed) {
-                airWaveArmed = false
                 main.post {
-                    airWaveArmButton.text = "ARM AIRWAVE TO SEND"
+                    disarmAirWave()
                     sendMessage()
                 }
             }
@@ -80,6 +79,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
     @Volatile private var writer: PrintWriter? = null
     @Volatile private var activeSocket: Closeable? = null
     private val sendLock = Any()
+    private var sending = false
     private val history = StringBuilder()
     private var recorder: MediaRecorder? = null
     private var pendingAudioFile: File? = null
@@ -397,7 +397,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
                 airWaveArmed = true
                 airWaveDetector.reset()
                 airWaveArmButton.text = "AIRWAVE ARMED • WAVE TO SEND"
-                status.text = "AirWave armed for this text message. Wave the phone twice to send."
+                status.text = "AirWave armed for the current draft or attachment. Wave the phone twice to send."
                 sensorManager.registerListener(this, linearAcceleration, SensorManager.SENSOR_DELAY_GAME)
             }
         }
@@ -465,7 +465,9 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 43) {
+        if (requestCode == 74) {
+            status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Microphone permission granted. Tap RECORD VOICE again." else "Microphone permission is required to record voice notes."
+        } else if (requestCode == 43) {
             status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Chat notifications enabled." else "Notifications are disabled. You can enable them in Android settings."
         } else if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             wifiTransport.discover()
