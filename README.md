@@ -52,4 +52,6 @@ gradle testDebugUnitTest
 gradle assembleDebug
 ```
 
+First source build downloads and checksum-verifies the pinned hand model during `preBuild`; this is build-time network access only. The installed app uses the packaged model offline. See `docs/THIRD-PARTY-MODEL-NOTICE.md`.
+
 APK output: `app/build/outputs/apk/debug/app-debug.apk`.
