@@ -48,6 +48,7 @@ internal class HandGestureController(
     private val waveSamples = ArrayDeque<Pair<Long, Float>>()
     private var lastWaveAt = 0L
     private var lastErrorAt = 0L
+    private val inferenceLock = Any()
 
     fun start() {
         val baseOptions = BaseOptions.builder()
@@ -98,8 +99,12 @@ internal class HandGestureController(
                 cameraProvider = provider
                 report("Camera active • hand recognition runs on this phone • frames are not saved.")
             } catch (error: Exception) {
-                report("Could not start hand camera: ${error.message ?: "camera unavailable"}")
-                close()
+                activity.runOnUiThread {
+                    if (!stopped) {
+                        onStatus("Could not start hand camera: ${error.message ?: "camera unavailable"}")
+                        close()
+                    }
+                }
             }
         }, ContextCompat.getMainExecutor(activity))
     }
@@ -113,7 +118,9 @@ internal class HandGestureController(
             source = proxy.toBitmap()
             rotated = rotate(source, proxy.imageInfo.rotationDegrees)
             mpImage = BitmapImageBuilder(rotated).build()
-            val result = landmarker?.detectForVideo(mpImage, SystemClock.uptimeMillis())
+            val result = synchronized(inferenceLock) {
+                if (stopped) null else landmarker?.detectForVideo(mpImage, SystemClock.uptimeMillis())
+            }
             val hand = result?.landmarks()?.firstOrNull()
             if (hand == null || hand.size < 21) {
                 resetPose()
@@ -221,9 +228,11 @@ internal class HandGestureController(
         stopped = true
         try { cameraProvider?.unbindAll() } catch (_: Exception) {}
         cameraProvider = null
-        try { landmarker?.close() } catch (_: Exception) {}
-        landmarker = null
         cameraExecutor.shutdownNow()
+        synchronized(inferenceLock) {
+            try { landmarker?.close() } catch (_: Exception) {}
+            landmarker = null
+        }
         previewContainer.removeAllViews()
         previewView = null
     }
