@@ -363,9 +363,15 @@ class MeshChatActivity : Activity(), SensorEventListener {
         connect.setOnClickListener { connectSelected() }
         send.setOnClickListener { disarmAirWave(); sendMessage() }
         recordAudioButton.setOnClickListener {
-            if (recorder == null) startVoiceRecording() else stopVoiceRecording(previewAudioButton, discardAudioButton)
+            if (sending) {
+                status.text = "Wait for the current transfer to finish."
+            } else if (recorder == null) startVoiceRecording() else stopVoiceRecording(previewAudioButton, discardAudioButton)
         }
         chooseAudio.setOnClickListener {
+            if (sending) {
+                status.text = "Wait for the current transfer to finish."
+                return@setOnClickListener
+            }
             startActivityForResult(android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(android.content.Intent.CATEGORY_OPENABLE)
                 type = "*/*"
@@ -373,6 +379,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
         previewAudioButton.setOnClickListener { playPendingAudio() }
         discardAudioButton.setOnClickListener {
+            if (sending) return@setOnClickListener
             pendingAudioFile?.delete()
             pendingAudioFile = null
             audioStatus.text = "Voice note discarded"
@@ -672,6 +679,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
     }
 
     private fun startVoiceRecording() {
+        if (pendingAudioFile != null) {
+            audioStatus.text = "Send or discard the current attachment before recording a new voice note."
+            return
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 74)
             return
