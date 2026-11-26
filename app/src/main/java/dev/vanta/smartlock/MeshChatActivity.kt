@@ -65,6 +65,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private var pendingAudioFile: File? = null
     private lateinit var audioStatus: TextView
     private lateinit var recordAudioButton: Button
+    private lateinit var previewAudioButton: Button
+    private lateinit var discardAudioButton: Button
     private val audioLimitBytes = 15L * 1024L * 1024L
 
     private fun hasBluetoothPermissions(): Boolean {
@@ -116,10 +118,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
         root.addView(audioRow)
         audioStatus = label("No voice note selected", 11f, 0xFF9EB2C8.toInt())
         root.addView(audioStatus)
-        val preview = Button(this).apply { text = "PLAY VOICE PREVIEW"; isEnabled = false }
-        root.addView(preview)
-        val discard = Button(this).apply { text = "DISCARD VOICE"; isEnabled = false }
-        root.addView(discard)
+        previewAudioButton = Button(this).apply { text = "PLAY VOICE PREVIEW"; isEnabled = false }
+        root.addView(previewAudioButton)
+        discardAudioButton = Button(this).apply { text = "DISCARD VOICE"; isEnabled = false }
+        root.addView(discardAudioButton)
         val send = Button(this).apply { text = "SEND MESSAGE / VOICE" }
         root.addView(send)
         val airWaveToggle = CheckBox(this).apply {
@@ -159,7 +161,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
         connect.setOnClickListener { connectSelected() }
         send.setOnClickListener { disarmAirWave(); sendMessage() }
         recordAudioButton.setOnClickListener {
-            if (recorder == null) startVoiceRecording() else stopVoiceRecording(preview, discard)
+            if (recorder == null) startVoiceRecording() else stopVoiceRecording(previewAudioButton, discardAudioButton)
         }
         chooseAudio.setOnClickListener {
             startActivityForResult(android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -167,13 +169,13 @@ class MeshChatActivity : Activity(), SensorEventListener {
                 type = "audio/*"
             }, 73)
         }
-        preview.setOnClickListener { playPendingAudio() }
-        discard.setOnClickListener {
+        previewAudioButton.setOnClickListener { playPendingAudio() }
+        discardAudioButton.setOnClickListener {
             pendingAudioFile?.delete()
             pendingAudioFile = null
             audioStatus.text = "Voice note discarded"
-            preview.isEnabled = false
-            discard.isEnabled = false
+            previewAudioButton.isEnabled = false
+            discardAudioButton.isEnabled = false
         }
         airWaveToggle.setOnCheckedChangeListener { _, enabled ->
             airWaveEnabled = enabled
@@ -376,8 +378,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
             val file = pendingAudioFile ?: error("Recording file missing.")
             require(file.length() in 1..audioLimitBytes) { "Voice note is empty or exceeds 15 MB." }
             audioStatus.text = "Voice note ready • ${file.length() / 1024} KB"
-            preview.isEnabled = true
-            discard.isEnabled = true
+            previewAudioButton.isEnabled = true
+            discardAudioButton.isEnabled = true
         } catch (error: Exception) {
             pendingAudioFile?.delete()
             pendingAudioFile = null
@@ -452,16 +454,12 @@ class MeshChatActivity : Activity(), SensorEventListener {
             pendingAudioFile?.delete()
             pendingAudioFile = target
             audioStatus.text = "Audio attached • ${target.length() / 1024} KB"
-            rootViewEnableAudioPreview(true)
+            previewAudioButton.isEnabled = true
+            discardAudioButton.isEnabled = true
         } catch (error: Exception) {
             target.delete()
             audioStatus.text = "Attachment failed: ${error.message ?: "file error"}"
         }
-    }
-
-    private fun rootViewEnableAudioPreview(enabled: Boolean) {
-        // The preview button remains safely disabled until a recording is complete;
-        // selected files can still be sent using Send or an armed AirWave gesture.
     }
 
     private fun append(line: String) {
