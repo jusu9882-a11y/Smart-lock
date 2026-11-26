@@ -32,7 +32,7 @@ AirWave is opt-in and requires the user to arm a prepared draft or attachment. I
 - Wi-Fi Direct and Bluetooth must be tested with two physical Android phones; CI cannot verify radio discovery, pairing, routing, or transfer.
 - Camera-based hand-pose recognition is not implemented.
 - The current file protocol uses Base64 line frames with a 15 MB limit; it does not yet provide streaming, progress, resume, or integrity checks.
-- Received files are private to the app and do not yet have an in-app export/open workflow.
+- Received files are listed in the chat, audio files can be played in-app, and any received file can be exported through Android's system document picker.
 - Notifications are available only while the chat process/session remains alive. There is no always-on background messaging service or store-and-forward relay.
 - Chat history stores text only; attachment payloads and voice recordings are not persisted in the transcript.
 - Bluetooth and Wi-Fi Direct are local transports; there is no long-distance town-to-town mode without external network infrastructure.
