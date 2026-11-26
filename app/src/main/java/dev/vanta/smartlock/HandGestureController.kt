@@ -51,19 +51,6 @@ internal class HandGestureController(
     private val inferenceLock = Any()
 
     fun start() {
-        val baseOptions = BaseOptions.builder()
-            .setModelAssetPath("hand_landmarker.task")
-            .build()
-        val options = HandLandmarker.HandLandmarkerOptions.builder()
-            .setBaseOptions(baseOptions)
-            .setRunningMode(RunningMode.VIDEO)
-            .setNumHands(1)
-            .setMinHandDetectionConfidence(0.55f)
-            .setMinHandPresenceConfidence(0.55f)
-            .setMinTrackingConfidence(0.55f)
-            .build()
-        landmarker = HandLandmarker.createFromOptions(activity, options)
-
         val view = PreviewView(activity).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -76,37 +63,66 @@ internal class HandGestureController(
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
+        report("Loading the offline hand model…")
 
-        val providerFuture = ProcessCameraProvider.getInstance(activity)
-        providerFuture.addListener({
-            if (stopped) return@addListener
+        cameraExecutor.execute {
             try {
-                val provider = providerFuture.get()
-                val selector = if (provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)) {
-                    CameraSelector.DEFAULT_FRONT_CAMERA
-                } else {
-                    CameraSelector.DEFAULT_BACK_CAMERA
-                }
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(view.surfaceProvider)
-                }
-                val analysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                val baseOptions = BaseOptions.builder()
+                    .setModelAssetPath("hand_landmarker.task")
                     .build()
-                analysis.setAnalyzer(cameraExecutor) { proxy -> analyseFrame(proxy) }
-                provider.unbindAll()
-                provider.bindToLifecycle(activity, selector, preview, analysis)
-                cameraProvider = provider
-                report("Camera active • hand recognition runs on this phone • frames are not saved.")
+                val options = HandLandmarker.HandLandmarkerOptions.builder()
+                    .setBaseOptions(baseOptions)
+                    .setRunningMode(RunningMode.VIDEO)
+                    .setNumHands(1)
+                    .setMinHandDetectionConfidence(0.55f)
+                    .setMinHandPresenceConfidence(0.55f)
+                    .setMinTrackingConfidence(0.55f)
+                    .build()
+                val createdLandmarker = HandLandmarker.createFromOptions(activity, options)
+                synchronized(inferenceLock) {
+                    if (stopped) createdLandmarker.close() else landmarker = createdLandmarker
+                }
+                if (stopped) return@execute
+
+                val providerFuture = ProcessCameraProvider.getInstance(activity)
+                providerFuture.addListener({
+                    if (stopped) return@addListener
+                    try {
+                        val provider = providerFuture.get()
+                        val selector = if (provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)) {
+                            CameraSelector.DEFAULT_FRONT_CAMERA
+                        } else {
+                            CameraSelector.DEFAULT_BACK_CAMERA
+                        }
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(view.surfaceProvider)
+                        }
+                        val analysis = ImageAnalysis.Builder()
+                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .build()
+                        analysis.setAnalyzer(cameraExecutor) { proxy -> analyseFrame(proxy) }
+                        provider.unbindAll()
+                        provider.bindToLifecycle(activity, selector, preview, analysis)
+                        cameraProvider = provider
+                        report("Camera active • hand recognition runs on this phone • frames are not saved.")
+                    } catch (error: Exception) {
+                        activity.runOnUiThread {
+                            if (!stopped) {
+                                onStatus("Could not start hand camera: ${error.message ?: "camera unavailable"}")
+                                close()
+                            }
+                        }
+                    }
+                }, ContextCompat.getMainExecutor(activity))
             } catch (error: Exception) {
                 activity.runOnUiThread {
                     if (!stopped) {
-                        onStatus("Could not start hand camera: ${error.message ?: "camera unavailable"}")
+                        onStatus("Could not load the offline hand model: ${error.message ?: "model unavailable"}")
                         close()
                     }
                 }
             }
-        }, ContextCompat.getMainExecutor(activity))
+        }
     }
 
     private fun analyseFrame(proxy: ImageProxy) {
