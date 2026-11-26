@@ -41,6 +41,8 @@ internal class HandGestureController(
     @Volatile private var stopped = false
     @Volatile private var landmarker: HandLandmarker? = null
     private var cameraProvider: ProcessCameraProvider? = null
+    private var previewUseCase: Preview? = null
+    private var analysisUseCase: ImageAnalysis? = null
     private var previewView: PreviewView? = null
     private var candidatePose = HandPose.UNKNOWN
     private var candidateFrames = 0
@@ -101,9 +103,11 @@ internal class HandGestureController(
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                             .build()
                         analysis.setAnalyzer(cameraExecutor) { proxy -> analyseFrame(proxy) }
-                        provider.unbindAll()
-                        provider.bindToLifecycle(activity, selector, preview, analysis)
+                        // Keep ownership scoped to this controller; never unbind unrelated app cameras.
                         cameraProvider = provider
+                        previewUseCase = preview
+                        analysisUseCase = analysis
+                        provider.bindToLifecycle(activity, selector, preview, analysis)
                         report("Camera active • hand recognition runs on this phone • frames are not saved.")
                     } catch (error: Exception) {
                         activity.runOnUiThread {
@@ -245,7 +249,16 @@ internal class HandGestureController(
     override fun close() {
         if (stopped) return
         stopped = true
-        try { cameraProvider?.unbindAll() } catch (_: Exception) {}
+        val analysis = analysisUseCase
+        val preview = previewUseCase
+        try { analysis?.clearAnalyzer() } catch (_: Exception) {}
+        try {
+            if (preview != null && analysis != null) cameraProvider?.unbind(preview, analysis)
+            else if (preview != null) cameraProvider?.unbind(preview)
+            else if (analysis != null) cameraProvider?.unbind(analysis)
+        } catch (_: Exception) {}
+        analysisUseCase = null
+        previewUseCase = null
         cameraProvider = null
         cameraExecutor.shutdownNow()
         synchronized(inferenceLock) {
