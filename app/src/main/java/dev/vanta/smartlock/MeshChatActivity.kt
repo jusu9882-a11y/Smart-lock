@@ -418,7 +418,12 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         }
         root.addView(nav, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         root.addView(pageHost)
-        showSection(1)
+        val initialSection = when (intent.getStringExtra("initial_section")) {
+            "connect" -> 0
+            "airwave" -> 3
+            else -> 1
+        }
+        showSection(initialSection)
         setContentView(root)
         createChatNotificationChannel()
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
