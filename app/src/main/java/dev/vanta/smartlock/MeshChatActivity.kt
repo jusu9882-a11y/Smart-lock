@@ -63,6 +63,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private val history = StringBuilder()
     private var recorder: MediaRecorder? = null
     private var pendingAudioFile: File? = null
+    private var recordingFile: File? = null
     private lateinit var audioStatus: TextView
     private lateinit var recordAudioButton: Button
     private lateinit var previewAudioButton: Button
@@ -359,8 +360,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
             active.prepare()
             active.start()
             recorder = active
-            pendingAudioFile?.delete()
-            pendingAudioFile = file
+            recordingFile = file
             recordAudioButton.text = "STOP & PREVIEW"
             audioStatus.text = "Recording… press STOP & PREVIEW when finished"
         } catch (error: Exception) {
@@ -375,18 +375,21 @@ class MeshChatActivity : Activity(), SensorEventListener {
         val active = recorder ?: return
         try {
             active.stop()
-            val file = pendingAudioFile ?: error("Recording file missing.")
+            val file = recordingFile ?: error("Recording file missing.")
             require(file.length() in 1..audioLimitBytes) { "Voice note is empty or exceeds 15 MB." }
+            pendingAudioFile?.delete()
+            pendingAudioFile = file
             audioStatus.text = "Voice note ready • ${file.length() / 1024} KB"
             previewAudioButton.isEnabled = true
             discardAudioButton.isEnabled = true
         } catch (error: Exception) {
-            pendingAudioFile?.delete()
-            pendingAudioFile = null
+            recordingFile?.delete()
+            recordingFile = null
             audioStatus.text = "Recording discarded: ${error.message ?: "recording failed"}"
         } finally {
             active.release()
             recorder = null
+            recordingFile = null
             recordAudioButton.text = "RECORD VOICE"
         }
     }
@@ -472,6 +475,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
         try { recorder?.stop() } catch (_: Exception) {}
         recorder?.release()
         recorder = null
+        recordingFile?.delete()
+        recordingFile = null
         try { socket?.close() } catch (_: Exception) {}
         try { server?.close() } catch (_: Exception) {}
         super.onDestroy()
