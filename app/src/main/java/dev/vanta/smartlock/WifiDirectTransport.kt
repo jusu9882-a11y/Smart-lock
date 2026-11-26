@@ -30,8 +30,8 @@ internal class WifiDirectTransport(
     private val onConnected: (Socket, String) -> Unit,
     private val onStatus: (String) -> Unit
 ) : Closeable {
-    private val manager = activity.getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
-    private val channel = manager.initialize(activity, Looper.getMainLooper(), null)
+    private val manager = activity.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager
+    private val channel = manager?.initialize(activity, Looper.getMainLooper(), null)
     private val main = Handler(Looper.getMainLooper())
     private var registered = false
     @Volatile private var socketStarted = false
@@ -55,6 +55,7 @@ internal class WifiDirectTransport(
 
     fun register() {
         if (registered) return
+        if (manager == null || channel == null) { report("This Android device does not support Wi-Fi Direct."); return }
         val filter = IntentFilter().apply {
             addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
@@ -81,8 +82,10 @@ internal class WifiDirectTransport(
             report("Grant Nearby Wi-Fi permission before discovering Wi-Fi Direct peers.")
             return
         }
+        val mgr = manager ?: return report("This Android device does not support Wi-Fi Direct.")
+        val ch = channel ?: return report("Wi-Fi Direct is unavailable on this device.")
         try {
-            manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+            mgr.discoverPeers(ch, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() = report("Searching for nearby Wi-Fi Direct devices…")
                 override fun onFailure(reason: Int) = report("Wi-Fi Direct discovery failed (code $reason).")
             })
@@ -97,8 +100,10 @@ internal class WifiDirectTransport(
             return
         }
         socketStarted = false
+        val mgr = manager ?: return report("This Android device does not support Wi-Fi Direct.")
+        val ch = channel ?: return report("Wi-Fi Direct is unavailable on this device.")
         try {
-            manager.createGroup(channel, object : WifiP2pManager.ActionListener {
+            mgr.createGroup(ch, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() = report("Creating a local Wi-Fi Direct group…")
                 override fun onFailure(reason: Int) = report("Could not host Wi-Fi Direct (code $reason).")
             })
@@ -114,8 +119,10 @@ internal class WifiDirectTransport(
         }
         socketStarted = false
         val config = WifiP2pConfig().apply { deviceAddress = device.deviceAddress }
+        val mgr = manager ?: return report("This Android device does not support Wi-Fi Direct.")
+        val ch = channel ?: return report("Wi-Fi Direct is unavailable on this device.")
         try {
-            manager.connect(channel, config, object : WifiP2pManager.ActionListener {
+            mgr.connect(ch, config, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() = report("Negotiating Wi-Fi Direct connection with ${device.deviceName}…")
                 override fun onFailure(reason: Int) = report("Wi-Fi Direct connection failed (code $reason).")
             })
@@ -126,8 +133,10 @@ internal class WifiDirectTransport(
 
     private fun requestPeers() {
         if (!hasPermission()) return
+        val mgr = manager ?: return report("This Android device does not support Wi-Fi Direct.")
+        val ch = channel ?: return report("Wi-Fi Direct is unavailable on this device.")
         try {
-            manager.requestPeers(channel) { list ->
+            mgr.requestPeers(ch) { list ->
                 val peers = list.deviceList.toList()
                 main.post { onPeers(peers) }
             }
@@ -138,8 +147,10 @@ internal class WifiDirectTransport(
 
     private fun requestConnectionInfo() {
         if (!hasPermission()) return
+        val mgr = manager ?: return report("This Android device does not support Wi-Fi Direct.")
+        val ch = channel ?: return report("Wi-Fi Direct is unavailable on this device.")
         try {
-            manager.requestConnectionInfo(channel) { info -> handleConnection(info) }
+            mgr.requestConnectionInfo(ch) { info -> handleConnection(info) }
         } catch (_: SecurityException) {
             report("Wi-Fi Direct permission is missing.")
         }
@@ -195,5 +206,15 @@ internal class WifiDirectTransport(
         }
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
+        if (hasPermission()) {
+            val mgr = manager
+            val ch = channel
+            if (mgr != null && ch != null) try {
+                mgr.removeGroup(ch, object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() = Unit
+                    override fun onFailure(reason: Int) = Unit
+                })
+            } catch (_: SecurityException) {}
+        }
     }
 }
