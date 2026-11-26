@@ -15,7 +15,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import java.io.Closeable
+import java.net.Inet4Address
 import java.net.InetSocketAddress
+import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
@@ -163,7 +165,11 @@ internal class WifiDirectTransport(
         if (info.isGroupOwner) {
             thread(name = "vanta-wifi-direct-server") {
                 try {
-                    val server = ServerSocket(8988)
+                    val localP2pAddress = findP2pInterfaceAddress()
+                        ?: error("Wi-Fi Direct interface address is not ready.")
+                    val server = ServerSocket()
+                    server.reuseAddress = true
+                    server.bind(InetSocketAddress(localP2pAddress, 8988), 1)
                     serverSocket = server
                     if (closed) {
                         server.close()
@@ -206,6 +212,19 @@ internal class WifiDirectTransport(
                 socketStarted = false
                 report("Wi-Fi Direct socket failed: ${lastError?.message ?: "connection timeout"}")
             }
+        }
+    }
+
+    private fun findP2pInterfaceAddress(): Inet4Address? {
+        return try {
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+            interfaces.toList()
+                .filter { it.isUp && it.name.contains("p2p", ignoreCase = true) }
+                .flatMap { it.inetAddresses.toList() }
+                .filterIsInstance<Inet4Address>()
+                .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+        } catch (_: Exception) {
+            null
         }
     }
 
