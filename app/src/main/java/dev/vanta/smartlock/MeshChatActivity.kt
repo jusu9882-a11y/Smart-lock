@@ -7,6 +7,9 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -20,6 +23,7 @@ import android.media.MediaPlayer
 import java.io.File
 import java.io.FileOutputStream
 import android.view.Gravity
+import android.view.View
 import android.widget.*
 import androidx.core.app.ActivityCompat
 import java.io.BufferedReader
@@ -89,57 +93,123 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        fun rounded(fill: Int, stroke: Int = 0xFF26384A.toInt(), radius: Float = 18f) =
+            GradientDrawable().apply {
+                setColor(fill)
+                cornerRadius = dp(radius.toInt()).toFloat()
+                setStroke(dp(1), stroke)
+            }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 28, 24, 20)
-            setBackgroundColor(0xFF06090E.toInt())
+            setPadding(dp(18), dp(22), dp(18), dp(18))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF08111C.toInt(), 0xFF06090E.toInt(), 0xFF05070B.toInt())
+            )
         }
         fun label(value: String, size: Float, color: Int = 0xFF55D9FF.toInt()) =
-            TextView(this).apply { text = value; textSize = size; setTextColor(color) }
-        root.addView(label("V A N T A   /   M E S H", 20f))
-        root.addView(label("OFFLINE ONE-TO-ONE • SECURE BLUETOOTH LINK", 11f, 0xFF8294AA.toInt()))
-        status = label("Checking Bluetooth…", 12f)
-        root.addView(status)
-        val discover = Button(this).apply { text = "MAKE THIS PHONE DISCOVERABLE" }
-        root.addView(discover)
+            TextView(this).apply {
+                text = value
+                textSize = size
+                setTextColor(color)
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            }
+        fun styleAction(button: Button, primary: Boolean = false) {
+            button.isAllCaps = false
+            button.textSize = 12f
+            button.minHeight = dp(48)
+            button.setPadding(dp(14), dp(10), dp(14), dp(10))
+            button.setTextColor(if (primary) 0xFF061018.toInt() else 0xFFDCEBFA.toInt())
+            button.background = rounded(
+                if (primary) 0xFF55D9FF.toInt() else 0xFF142333.toInt(),
+                if (primary) 0xFF55D9FF.toInt() else 0xFF29445C.toInt(),
+                14f
+            )
+            button.stateListAnimator = null
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = rounded(0xFF101D2A.toInt(), 0xFF25445A.toInt(), 18f)
+        }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brand.addView(label("VANTA MESH", 20f))
+        brand.addView(label("PRIVATE • OFFLINE • DEVICE TO DEVICE", 9f, 0xFF8294AA.toInt()))
+        top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(label("● LOCAL", 10f, 0xFF65E6B4.toInt()))
+        root.addView(top, LinearLayout.LayoutParams(-1, -2))
+        val subhead = label("YOUR PRIVATE CONVERSATION", 10f, 0xFF8294AA.toInt())
+        subhead.letterSpacing = 0.12f
+        subhead.setPadding(dp(4), dp(18), dp(4), dp(8))
+        root.addView(subhead)
+        status = label("Checking Bluetooth…", 11f, 0xFFB9D0E4.toInt())
+        status.setPadding(dp(14), dp(12), dp(14), dp(12))
+        status.background = rounded(0xFF101D2A.toInt(), 0xFF29445C.toInt(), 14f)
+        root.addView(status, LinearLayout.LayoutParams(-1, -2))
+        val discover = Button(this).apply { text = "Make discoverable" }
+        styleAction(discover)
+        root.addView(discover, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         peers = Spinner(this)
-        root.addView(peers)
-        val connect = Button(this).apply { text = "CONNECT TO PAIRED DEVICE" }
-        root.addView(connect)
-        transcript = label("No conversation yet. Pair both phones in Android Bluetooth settings first.", 14f, 0xFFE7F2FF.toInt())
-        transcript.gravity = Gravity.BOTTOM
-        val scroll = ScrollView(this)
+        peers.setPadding(dp(8), dp(8), dp(8), dp(8))
+        root.addView(peers, LinearLayout.LayoutParams(-1, -2))
+        val connect = Button(this).apply { text = "Connect to paired device" }
+        styleAction(connect, true)
+        root.addView(connect, LinearLayout.LayoutParams(-1, -2))
+        transcript = label("No messages yet.\n\nPair both phones in Android Bluetooth settings, then connect to start chatting.", 14f, 0xFFE7F2FF.toInt())
+        transcript.gravity = Gravity.TOP
+        transcript.setPadding(dp(16), dp(16), dp(16), dp(16))
+        transcript.background = rounded(0xFF0C1722.toInt(), 0xFF1D3448.toInt(), 18f)
+        val scroll = ScrollView(this).apply { isFillViewport = true }
         scroll.addView(transcript)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        input = EditText(this).apply { hint = "Write a message…"; setTextColor(-1); setHintTextColor(0xFF8294AA.toInt()) }
-        root.addView(input)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(210)).apply { topMargin = dp(8); bottomMargin = dp(12) })
+        input = EditText(this).apply {
+            hint = "Write a message…"
+            setTextColor(0xFFE7F2FF.toInt())
+            setHintTextColor(0xFF8294AA.toInt())
+            textSize = 15f
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            background = rounded(0xFF101D2A.toInt(), 0xFF29445C.toInt(), 16f)
+            minHeight = dp(54)
+        }
+        root.addView(input, LinearLayout.LayoutParams(-1, -2))
         val audioRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         recordAudioButton = Button(this).apply { text = "RECORD VOICE" }
         val chooseAudio = Button(this).apply { text = "ATTACH FILE" }
-        audioRow.addView(recordAudioButton, LinearLayout.LayoutParams(0, -2, 1f))
-        audioRow.addView(chooseAudio, LinearLayout.LayoutParams(0, -2, 1f))
+        styleAction(recordAudioButton)
+        styleAction(chooseAudio)
+        audioRow.addView(recordAudioButton, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(6) })
+        audioRow.addView(chooseAudio, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
         root.addView(audioRow)
         audioStatus = label("No voice note selected", 11f, 0xFF9EB2C8.toInt())
+        audioStatus.setPadding(dp(4), dp(8), dp(4), dp(4))
         root.addView(audioStatus)
-        previewAudioButton = Button(this).apply { text = "PREVIEW AUDIO"; isEnabled = false }
-        root.addView(previewAudioButton)
-        discardAudioButton = Button(this).apply { text = "DISCARD ATTACHMENT"; isEnabled = false }
-        root.addView(discardAudioButton)
-        val send = Button(this).apply { text = "SEND MESSAGE / FILE" }
-        root.addView(send)
+        previewAudioButton = Button(this).apply { text = "Preview attachment"; isEnabled = false }
+        styleAction(previewAudioButton)
+        root.addView(previewAudioButton, LinearLayout.LayoutParams(-1, -2))
+        discardAudioButton = Button(this).apply { text = "Discard attachment"; isEnabled = false }
+        styleAction(discardAudioButton)
+        root.addView(discardAudioButton, LinearLayout.LayoutParams(-1, -2))
+        val send = Button(this).apply { text = "Send message / file" }
+        styleAction(send, true)
+        root.addView(send, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         val airWaveToggle = CheckBox(this).apply {
             text = "Enable optional AirWave gesture"
             setTextColor(0xFFE7F2FF.toInt())
             isChecked = getSharedPreferences("vanta_mesh", MODE_PRIVATE)
                 .getBoolean("airwave_enabled", false)
         }
+        airWaveToggle.setPadding(dp(4), dp(8), dp(4), dp(4))
         root.addView(airWaveToggle)
         airWaveEnabled = airWaveToggle.isChecked
         airWaveArmButton = Button(this).apply {
             text = "ARM AIRWAVE TO SEND"
             isEnabled = airWaveEnabled
         }
-        root.addView(airWaveArmButton)
+        styleAction(airWaveArmButton)
+        root.addView(airWaveArmButton, LinearLayout.LayoutParams(-1, -2))
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         linearAcceleration = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
         if (linearAcceleration == null) {
@@ -147,7 +217,12 @@ class MeshChatActivity : Activity(), SensorEventListener {
             airWaveArmButton.isEnabled = false
             status.text = "AirWave motion sensor is unavailable on this phone."
         }
-        setContentView(root)
+        val page = ScrollView(this).apply {
+            fillViewport = true
+            setBackgroundColor(Color.TRANSPARENT)
+            addView(root)
+        }
+        setContentView(page)
 
         discover.setOnClickListener {
             if (!hasBluetoothPermissions()) { requestBluetoothPermissions(); return@setOnClickListener }
