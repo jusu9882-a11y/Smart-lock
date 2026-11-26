@@ -37,6 +37,7 @@ import androidx.core.app.NotificationCompat
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
+import java.io.OutputStreamWriter
 import java.util.UUID
 import kotlin.concurrent.thread
 
@@ -73,11 +74,12 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private lateinit var wifiPeers: Spinner
     private var wifiPeerDevices: List<WifiP2pDevice> = emptyList()
     private lateinit var wifiTransport: WifiDirectTransport
-    private var activeSocket: Closeable? = null
     @Volatile private var chatVisible = false
     private val notificationChannelId = "vanta_mesh_messages"
     private var server: BluetoothServerSocket? = null
-    private var writer: PrintWriter? = null
+    @Volatile private var writer: PrintWriter? = null
+    @Volatile private var activeSocket: Closeable? = null
+    private val sendLock = Any()
     private val history = StringBuilder()
     private var recorder: MediaRecorder? = null
     private var pendingAudioFile: File? = null
@@ -534,7 +536,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
     ) {
         try { activeSocket?.close() } catch (_: Exception) {}
         activeSocket = connected
-        writer = PrintWriter(outputStream, true)
+        writer = PrintWriter(OutputStreamWriter(outputStream, Charsets.UTF_8), true)
         main.post {
             status.text = "CONNECTED • $peerName"
             append("System: secure local connection established.")
@@ -603,20 +605,53 @@ class MeshChatActivity : Activity(), SensorEventListener {
         val attachment = pendingAudioFile
         if (message.isEmpty() && attachment == null) return
         val out = writer
-        if (out == null || out.checkError()) { status.text = "Not connected. Connect to a paired phone first."; return }
-        if (attachment != null && attachment.length() !in 1..audioLimitBytes) { status.text = "Attachment must be between 1 byte and 15 MB."; return }
-        val encodedText = if (message.isNotEmpty()) android.util.Base64.encodeToString(message.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP) else null
-        val encodedFile = attachment?.let { android.util.Base64.encodeToString(it.readBytes(), android.util.Base64.NO_WRAP) }
+        if (out == null || out.checkError()) {
+            status.text = "Not connected. Connect to a nearby phone first."
+            return
+        }
+        if (attachment != null && attachment.length() !in 1..audioLimitBytes) {
+            status.text = "Attachment must be between 1 byte and 15 MB."
+            return
+        }
         val mime = pendingAttachmentMime
         val fileName = pendingAttachmentName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
+        status.text = "Sending over the active local connection…"
         thread(name = "vanta-mesh-send") {
-            if (encodedText != null) out.println(encodedText)
-            if (encodedFile != null) out.println("FILE|$mime|$fileName|$encodedFile")
-            main.post {
-                if (message.isNotEmpty()) append("You: $message")
-                input.setText("")
-                if (attachment != null) { append("You sent file: $fileName"); attachment.delete(); if (pendingAudioFile == attachment) pendingAudioFile = null; audioStatus.text = "File sent"; previewAudioButton.isEnabled = false; discardAudioButton.isEnabled = false }
-                status.text = "Sent over the local Bluetooth link."
+            try {
+                val encodedText = if (message.isNotEmpty())
+                    android.util.Base64.encodeToString(message.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+                else null
+                val encodedFile = attachment?.let {
+                    android.util.Base64.encodeToString(it.readBytes(), android.util.Base64.NO_WRAP)
+                }
+                val sent = synchronized(sendLock) {
+                    if (writer !== out || out.checkError()) {
+                        false
+                    } else {
+                        if (encodedText != null) out.println(encodedText)
+                        if (encodedFile != null) out.println("FILE|$mime|$fileName|$encodedFile")
+                        !out.checkError()
+                    }
+                }
+                main.post {
+                    if (!sent) {
+                        status.text = "Send failed. Check the connection and try again; your draft is kept."
+                    } else {
+                        if (message.isNotEmpty()) append("You: $message")
+                        input.setText("")
+                        if (attachment != null && pendingAudioFile == attachment) {
+                            append("You sent file: $fileName")
+                            attachment.delete()
+                            pendingAudioFile = null
+                            audioStatus.text = "File sent"
+                            previewAudioButton.isEnabled = false
+                            discardAudioButton.isEnabled = false
+                        }
+                        status.text = "Sent over the active local connection."
+                    }
+                }
+            } catch (error: Exception) {
+                main.post { status.text = "Send failed: ${error.message ?: "local transfer error"}. Your draft is kept." }
             }
         }
     }
@@ -688,30 +723,6 @@ class MeshChatActivity : Activity(), SensorEventListener {
             audioStatus.text = "Playing voice preview…"
         } catch (error: Exception) {
             audioStatus.text = "Preview failed: ${error.message ?: "audio error"}"
-        }
-    }
-
-    private fun sendPendingAudio() {
-        val file = pendingAudioFile ?: return
-        val out = writer
-        if (out == null || out.checkError()) {
-            status.text = "Not connected. Connect to a paired phone first."
-            return
-        }
-        if (file.length() !in 1..audioLimitBytes) {
-            status.text = "Audio must be between 1 byte and 15 MB."
-            return
-        }
-        val encoded = android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
-        thread(name = "vanta-mesh-audio-send") {
-            out.println("AUDIO|voice_${System.currentTimeMillis()}.m4a|$encoded")
-            main.post {
-                append("You sent a voice note.")
-                file.delete()
-                pendingAudioFile = null
-                audioStatus.text = "Voice note sent"
-                status.text = "Voice note transferred over Bluetooth."
-            }
         }
     }
 
