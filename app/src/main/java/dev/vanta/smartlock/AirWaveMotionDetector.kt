@@ -33,7 +33,7 @@ internal class AirWaveMotionDetector(
             ) {
                 firstPeakAtMs = nowMs
             } else {
-                if (nowMs - lastTriggerAtMs >= cooldownMs) {
+                if (lastTriggerAtMs == Long.MIN_VALUE || nowMs - lastTriggerAtMs >= cooldownMs) {
                     lastTriggerAtMs = nowMs
                     firstPeakAtMs = 0L
                     onWave()
