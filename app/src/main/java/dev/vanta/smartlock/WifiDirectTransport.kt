@@ -36,7 +36,7 @@ internal class WifiDirectTransport(
     private var registered = false
     @Volatile private var socketStarted = false
     @Volatile private var closed = false
-    private var serverSocket: ServerSocket? = null
+    @Volatile private var serverSocket: ServerSocket? = null
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -196,7 +196,9 @@ internal class WifiDirectTransport(
         }
     }
 
-    private fun report(message: String) = main.post { if (!closed) onStatus(message) }
+    private fun report(message: String) {
+        main.post { if (!closed) onStatus(message) }
+    }
 
     override fun close() {
         closed = true
