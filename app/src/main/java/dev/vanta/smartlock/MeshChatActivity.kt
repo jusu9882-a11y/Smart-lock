@@ -650,7 +650,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
                         status.text = "Send failed. Check the connection and try again; your draft is kept."
                     } else {
                         if (message.isNotEmpty()) append("You: $message")
-                        input.setText("")
+                        if (input.text.toString().trim() == message) input.setText("")
                         if (attachment != null && pendingAudioFile == attachment) {
                             append("You sent file: $fileName")
                             attachment.delete()
