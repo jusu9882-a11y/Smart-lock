@@ -487,10 +487,14 @@ class MeshChatActivity : Activity(), SensorEventListener {
         } else if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             wifiTransport.discover()
             status.text = "Nearby Wi-Fi permission granted."
+        } else if (requestCode == 42) {
+            status.text = "Nearby Wi-Fi permission was denied. Bluetooth chat remains available."
         } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             refreshPeers()
             status.text = "Bluetooth permissions granted. Pair devices in Android settings."
-        } else status.text = "Bluetooth permissions are required for nearby chat."
+        } else if (requestCode == 41) {
+            status.text = "Bluetooth permissions were denied. Nearby chat needs Bluetooth access."
+        }
     }
 
     private fun refreshPeers() {
