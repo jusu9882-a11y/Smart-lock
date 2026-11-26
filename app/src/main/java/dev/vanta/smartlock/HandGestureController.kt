@@ -115,11 +115,14 @@ internal class HandGestureController(
         var mpImage: com.google.mediapipe.framework.image.MPImage? = null
         try {
             if (stopped) return
-            source = proxy.toBitmap()
-            rotated = rotate(source, proxy.imageInfo.rotationDegrees)
-            mpImage = BitmapImageBuilder(rotated).build()
+            val sourceBitmap = proxy.toBitmap()
+            source = sourceBitmap
+            val rotatedBitmap = rotate(sourceBitmap, proxy.imageInfo.rotationDegrees)
+            rotated = rotatedBitmap
+            val inputImage = BitmapImageBuilder(rotatedBitmap).build()
+            mpImage = inputImage
             val result = synchronized(inferenceLock) {
-                if (stopped) null else landmarker?.detectForVideo(mpImage, SystemClock.uptimeMillis())
+                if (stopped) null else landmarker?.detectForVideo(inputImage, SystemClock.uptimeMillis())
             }
             val hand = result?.landmarks()?.firstOrNull()
             if (hand == null || hand.size < 21) {
