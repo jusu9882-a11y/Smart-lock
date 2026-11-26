@@ -165,7 +165,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(label("● LOCAL", 10f, 0xFF65E6B4.toInt()))
         root.addView(top, LinearLayout.LayoutParams(-1, -2))
-        val subhead = label("YOUR PRIVATE CONVERSATION", 10f, 0xFF8294AA.toInt())
+        val subhead = label("MESSAGES • CONNECTIONS • MEDIA • AIRWAVE", 10f, 0xFF8294AA.toInt())
         subhead.letterSpacing = 0.12f
         subhead.setPadding(dp(4), dp(18), dp(4), dp(8))
         root.addView(subhead)
