@@ -58,7 +58,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
         })
     }
     private lateinit var status: TextView
-    private lateinit var transcript: TextView
+    private lateinit var transcript: LinearLayout
+    private lateinit var chatScroll: ScrollView
     private lateinit var input: EditText
     private lateinit var peers: Spinner
     private var socket: BluetoothSocket? = null
@@ -158,13 +159,21 @@ class MeshChatActivity : Activity(), SensorEventListener {
         val connect = Button(this).apply { text = "Connect to paired device" }
         styleAction(connect, true)
         root.addView(connect, LinearLayout.LayoutParams(-1, -2))
-        transcript = label("No messages yet.\n\nPair both phones in Android Bluetooth settings, then connect to start chatting.", 14f, 0xFFE7F2FF.toInt())
-        transcript.gravity = Gravity.TOP
-        transcript.setPadding(dp(16), dp(16), dp(16), dp(16))
-        transcript.background = rounded(0xFF0C1722.toInt(), 0xFF1D3448.toInt(), 18f)
-        val scroll = ScrollView(this).apply { isFillViewport = true }
-        scroll.addView(transcript)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(210)).apply { topMargin = dp(8); bottomMargin = dp(12) })
+        transcript = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(14), dp(12), dp(14))
+        }
+        val welcome = label("No messages yet. Pair both phones in Android Bluetooth settings, then connect to start chatting.", 13f, 0xFF9EB2C8.toInt())
+        welcome.setPadding(dp(12), dp(14), dp(12), dp(14))
+        transcript.addView(welcome)
+        chatScroll = ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            setPadding(0, dp(4), 0, dp(4))
+            background = rounded(0xFF0C1722.toInt(), 0xFF1D3448.toInt(), 18f)
+            addView(transcript)
+        }
+        root.addView(chatScroll, LinearLayout.LayoutParams(-1, dp(240)).apply { topMargin = dp(8); bottomMargin = dp(12) })
         input = EditText(this).apply {
             hint = "Write a message…"
             setTextColor(0xFFE7F2FF.toInt())
@@ -218,7 +227,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
             status.text = "AirWave motion sensor is unavailable on this phone."
         }
         val page = ScrollView(this).apply {
-            fillViewport = true
+            setFillViewport(true)
             setBackgroundColor(Color.TRANSPARENT)
             addView(root)
         }
@@ -561,7 +570,43 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     private fun append(line: String) {
         history.append(line).append('\n')
-        transcript.text = history.toString()
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        val isMine = line.startsWith("You:")
+        val isPeer = line.startsWith("Peer:")
+        val isSystem = line.startsWith("System:")
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = when {
+                isMine -> Gravity.END
+                isSystem -> Gravity.CENTER_HORIZONTAL
+                else -> Gravity.START
+            }
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        val bubble = TextView(this).apply {
+            text = line.removePrefix("You: ").removePrefix("Peer: ").removePrefix("System: ")
+            textSize = if (isSystem) 10f else 14f
+            setTextColor(when {
+                isMine -> 0xFF061018.toInt()
+                isSystem -> 0xFF8294AA.toInt()
+                else -> 0xFFE7F2FF.toInt()
+            })
+            setPadding(dp(13), dp(10), dp(13), dp(10))
+            maxWidth = (resources.displayMetrics.widthPixels * 0.76f).toInt()
+            background = GradientDrawable().apply {
+                setColor(when {
+                    isMine -> 0xFF55D9FF.toInt()
+                    isSystem -> 0xFF172431.toInt()
+                    else -> 0xFF1A2B3B.toInt()
+                })
+                cornerRadius = dp(16).toFloat()
+                if (!isSystem) setStroke(dp(1), if (isMine) 0xFF55D9FF.toInt() else 0xFF29445C.toInt())
+            }
+        }
+        row.addView(bubble, LinearLayout.LayoutParams(-2, -2))
+        transcript.addView(row, LinearLayout.LayoutParams(-1, -2))
+        chatScroll.post { chatScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
     override fun onDestroy() {
