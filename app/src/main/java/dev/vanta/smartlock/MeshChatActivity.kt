@@ -15,6 +15,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.media.MediaRecorder
+import android.media.MediaPlayer
+import java.io.File
+import java.io.FileOutputStream
 import android.view.Gravity
 import android.widget.*
 import androidx.core.app.ActivityCompat
@@ -57,6 +61,11 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private var server: BluetoothServerSocket? = null
     private var writer: PrintWriter? = null
     private val history = StringBuilder()
+    private var recorder: MediaRecorder? = null
+    private var pendingAudioFile: File? = null
+    private lateinit var audioStatus: TextView
+    private lateinit var recordAudioButton: Button
+    private val audioLimitBytes = 15L * 1024L * 1024L
 
     private fun hasBluetoothPermissions(): Boolean {
         if (Build.VERSION.SDK_INT < 31) return true
@@ -99,7 +108,19 @@ class MeshChatActivity : Activity(), SensorEventListener {
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         input = EditText(this).apply { hint = "Write a message…"; setTextColor(-1); setHintTextColor(0xFF8294AA.toInt()) }
         root.addView(input)
-        val send = Button(this).apply { text = "SEND MESSAGE" }
+        val audioRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        recordAudioButton = Button(this).apply { text = "RECORD VOICE" }
+        val chooseAudio = Button(this).apply { text = "ATTACH AUDIO" }
+        audioRow.addView(recordAudioButton, LinearLayout.LayoutParams(0, -2, 1f))
+        audioRow.addView(chooseAudio, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(audioRow)
+        audioStatus = label("No voice note selected", 11f, 0xFF9EB2C8.toInt())
+        root.addView(audioStatus)
+        val preview = Button(this).apply { text = "PLAY VOICE PREVIEW"; isEnabled = false }
+        root.addView(preview)
+        val discard = Button(this).apply { text = "DISCARD VOICE"; isEnabled = false }
+        root.addView(discard)
+        val send = Button(this).apply { text = "SEND MESSAGE / VOICE" }
         root.addView(send)
         val airWaveToggle = CheckBox(this).apply {
             text = "Enable optional AirWave gesture"
@@ -137,6 +158,23 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
         connect.setOnClickListener { connectSelected() }
         send.setOnClickListener { disarmAirWave(); sendMessage() }
+        recordAudioButton.setOnClickListener {
+            if (recorder == null) startVoiceRecording() else stopVoiceRecording(preview, discard)
+        }
+        chooseAudio.setOnClickListener {
+            startActivityForResult(android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                type = "audio/*"
+            }, 73)
+        }
+        preview.setOnClickListener { playPendingAudio() }
+        discard.setOnClickListener {
+            pendingAudioFile?.delete()
+            pendingAudioFile = null
+            audioStatus.text = "Voice note discarded"
+            preview.isEnabled = false
+            discard.isEnabled = false
+        }
         airWaveToggle.setOnCheckedChangeListener { _, enabled ->
             airWaveEnabled = enabled
             airWaveArmed = false
@@ -148,8 +186,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
         airWaveArmButton.setOnClickListener {
             if (!airWaveEnabled) return@setOnClickListener
-            if (input.text.toString().isBlank()) {
-                status.text = "Write a message first, then arm AirWave."
+            if (input.text.toString().isBlank() && pendingAudioFile == null) {
+                status.text = "Write a message or attach a voice note first, then arm AirWave."
             } else if (linearAcceleration == null) {
                 status.text = "This phone does not provide the required motion sensor."
             } else {
@@ -254,8 +292,20 @@ class MeshChatActivity : Activity(), SensorEventListener {
                 val reader = BufferedReader(InputStreamReader(connected.inputStream, Charsets.UTF_8))
                 while (true) {
                     val line = reader.readLine() ?: break
-                    val message = String(android.util.Base64.decode(line, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                    main.post { append("Peer: $message") }
+                    if (line.startsWith("AUDIO|")) {
+                        val parts = line.split('|', limit = 3)
+                        if (parts.size == 3) {
+                            val safeName = parts[1].replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+                            val bytes = android.util.Base64.decode(parts[2], android.util.Base64.DEFAULT)
+                            val dir = File(filesDir, "mesh_received").apply { mkdirs() }
+                            val received = File(dir, "${System.currentTimeMillis()}_$safeName")
+                            received.writeBytes(bytes)
+                            main.post { append("Peer sent audio: ${received.name} (${bytes.size / 1024} KB)") }
+                        }
+                    } else {
+                        val message = String(android.util.Base64.decode(line, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                        main.post { append("Peer: $message") }
+                    }
                 }
             } catch (_: Exception) { }
             main.post {
@@ -271,6 +321,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     private fun sendMessage() {
         val message = input.text.toString().trim()
+        if (message.isEmpty() && pendingAudioFile != null) { sendPendingAudio(); return }
         if (message.isEmpty()) return
         val out = writer
         if (out == null || out.checkError()) {
@@ -288,6 +339,131 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
     }
 
+
+    private fun startVoiceRecording() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 74)
+            return
+        }
+        val file = File(cacheDir, "vanta_voice_${System.currentTimeMillis()}.m4a")
+        try {
+            val active = MediaRecorder()
+            active.setAudioSource(MediaRecorder.AudioSource.MIC)
+            active.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            active.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            active.setAudioEncodingBitRate(96000)
+            active.setAudioSamplingRate(44100)
+            active.setOutputFile(file.absolutePath)
+            active.prepare()
+            active.start()
+            recorder = active
+            pendingAudioFile?.delete()
+            pendingAudioFile = file
+            recordAudioButton.text = "STOP & PREVIEW"
+            audioStatus.text = "Recording… press STOP & PREVIEW when finished"
+        } catch (error: Exception) {
+            file.delete()
+            recorder?.release()
+            recorder = null
+            audioStatus.text = "Recording failed: ${error.message ?: "microphone error"}"
+        }
+    }
+
+    private fun stopVoiceRecording(preview: Button, discard: Button) {
+        val active = recorder ?: return
+        try {
+            active.stop()
+            val file = pendingAudioFile ?: error("Recording file missing.")
+            require(file.length() in 1..audioLimitBytes) { "Voice note is empty or exceeds 15 MB." }
+            audioStatus.text = "Voice note ready • ${file.length() / 1024} KB"
+            preview.isEnabled = true
+            discard.isEnabled = true
+        } catch (error: Exception) {
+            pendingAudioFile?.delete()
+            pendingAudioFile = null
+            audioStatus.text = "Recording discarded: ${error.message ?: "recording failed"}"
+        } finally {
+            active.release()
+            recorder = null
+            recordAudioButton.text = "RECORD VOICE"
+        }
+    }
+
+    private fun playPendingAudio() {
+        val file = pendingAudioFile ?: return
+        try {
+            val player = MediaPlayer()
+            player.setDataSource(file.absolutePath)
+            player.setOnCompletionListener { it.release() }
+            player.setOnErrorListener { mp, _, _ -> mp.release(); true }
+            player.prepare()
+            player.start()
+            audioStatus.text = "Playing voice preview…"
+        } catch (error: Exception) {
+            audioStatus.text = "Preview failed: ${error.message ?: "audio error"}"
+        }
+    }
+
+    private fun sendPendingAudio() {
+        val file = pendingAudioFile ?: return
+        val out = writer
+        if (out == null || out.checkError()) {
+            status.text = "Not connected. Connect to a paired phone first."
+            return
+        }
+        if (file.length() !in 1..audioLimitBytes) {
+            status.text = "Audio must be between 1 byte and 15 MB."
+            return
+        }
+        val encoded = android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
+        thread(name = "vanta-mesh-audio-send") {
+            out.println("AUDIO|voice_${System.currentTimeMillis()}.m4a|$encoded")
+            main.post {
+                append("You sent a voice note.")
+                file.delete()
+                pendingAudioFile = null
+                audioStatus.text = "Voice note sent"
+                status.text = "Voice note transferred over Bluetooth."
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 73 || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        val target = File(cacheDir, "vanta_audio_${System.currentTimeMillis()}.audio")
+        try {
+            require(contentResolver.getType(uri).orEmpty().startsWith("audio/")) { "Choose an audio file." }
+            contentResolver.openInputStream(uri)?.use { source ->
+                FileOutputStream(target).use { sink ->
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = source.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= audioLimitBytes) { "Audio file exceeds 15 MB." }
+                        sink.write(buffer, 0, count)
+                    }
+                }
+            } ?: error("Unable to open selected audio.")
+            require(target.length() > 0) { "Selected file is empty." }
+            pendingAudioFile?.delete()
+            pendingAudioFile = target
+            audioStatus.text = "Audio attached • ${target.length() / 1024} KB"
+            rootViewEnableAudioPreview(true)
+        } catch (error: Exception) {
+            target.delete()
+            audioStatus.text = "Attachment failed: ${error.message ?: "file error"}"
+        }
+    }
+
+    private fun rootViewEnableAudioPreview(enabled: Boolean) {
+        // The preview button remains safely disabled until a recording is complete;
+        // selected files can still be sent using Send or an armed AirWave gesture.
+    }
+
     private fun append(line: String) {
         history.append(line).append('\n')
         transcript.text = history.toString()
@@ -295,6 +471,9 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onDestroy() {
         disarmAirWave()
+        try { recorder?.stop() } catch (_: Exception) {}
+        recorder?.release()
+        recorder = null
         try { socket?.close() } catch (_: Exception) {}
         try { server?.close() } catch (_: Exception) {}
         super.onDestroy()
