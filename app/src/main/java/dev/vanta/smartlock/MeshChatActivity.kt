@@ -170,28 +170,23 @@ class MeshChatActivity : Activity(), SensorEventListener {
             AlertDialog.Builder(this)
                 .setTitle("VANTA MESH • Quick guide")
                 .setMessage(
-                    "1. Turn on Bluetooth or Wi-Fi on both phones.
+                    """
+                    1. Turn on Bluetooth or Wi-Fi on both phones.
 
-" +
-                    "2. Bluetooth: pair both phones in Android Settings. On one phone tap Make discoverable; on the other select the paired phone and tap Connect.
+                    2. Bluetooth: pair both phones in Android Settings. On one phone tap Make discoverable; on the other select the paired phone and tap Connect.
 
-" +
-                    "3. Wi-Fi Direct: grant Nearby Wi-Fi permission on both phones. On one phone tap Host Wi-Fi. On the other tap Find Wi-Fi Peers, select the host, then tap Connect Wi-Fi Peer.
+                    3. Wi-Fi Direct: grant Nearby Wi-Fi permission on both phones. On one phone tap Host Wi-Fi. On the other tap Find Wi-Fi Peers, select the host, then tap Connect Wi-Fi Peer.
 
-" +
-                    "4. Wait until the status says CONNECTED. Then send text, record a voice note, or attach a file.
+                    4. Wait until the status says CONNECTED. Then send text, record a voice note, or attach a file.
 
-" +
-                    "5. Voice: tap Record Voice, then Stop & Preview. File: tap Attach File. Use Send to transfer.
+                    5. Voice: tap Record Voice, then Stop & Preview. File: tap Attach File. Use Send to transfer.
 
-" +
-                    "6. AirWave is optional. Enable it, prepare a draft or attachment, then arm it. A deliberate phone wave sends the selected item once. It does not recognise a fist or an open hand.
+                    6. AirWave is optional. Enable it, prepare a draft or attachment, then arm it. A deliberate phone wave sends the selected item once. It does not recognise a fist or an open hand.
 
-" +
-                    "7. Chat history is encrypted on this phone. Use Clear Chat History to erase it. Incoming notifications work while the chat session remains active in the background.
+                    7. Chat history is encrypted on this phone. Use Clear Chat History to erase it. Incoming notifications work while the chat session remains active in the background.
 
-" +
-                    "VANTA works without mobile data or Internet access. Wi-Fi Direct is local range only; it cannot reach another town without network infrastructure."
+                    VANTA works without mobile data or Internet access. Wi-Fi Direct is local range only; it cannot reach another town without network infrastructure.
+                    """.trimIndent()
                 )
                 .setPositiveButton("GOT IT", null)
                 .show()
