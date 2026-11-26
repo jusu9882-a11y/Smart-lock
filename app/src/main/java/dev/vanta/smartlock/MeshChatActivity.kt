@@ -331,12 +331,93 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         if (linearAcceleration == null) {
             status.text = "Phone-motion AirWave is unavailable. Optional camera hand-wave sending can still be enabled."
         }
-        val page = ScrollView(this).apply {
-            setFillViewport(true)
-            setBackgroundColor(Color.TRANSPARENT)
-            addView(root)
+        // Split the formerly crowded single form into four focused sections.
+        // Existing transport, messaging and media controls are re-parented, not recreated.
+        fun sectionScroll(): Pair<ScrollView, LinearLayout> {
+            val content = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(8), 0, dp(16))
+            }
+            val scroll = ScrollView(this).apply {
+                isFillViewport = true
+                clipToPadding = false
+                addView(content)
+                visibility = View.GONE
+            }
+            return scroll to content
         }
-        setContentView(page)
+        val (connectionsPage, connectionsContent) = sectionScroll()
+        val (chatPage, chatContent) = sectionScroll()
+        val (mediaPage, mediaContent) = sectionScroll()
+        val (airWavePage, airWaveContent) = sectionScroll()
+        // Children 0-2 are the persistent brand, subtitle and connection status.
+        // The remaining original controls are grouped by their original creation order.
+        val originalControls = ArrayList<View>()
+        while (root.childCount > 3) {
+            val child = root.getChildAt(3)
+            root.removeViewAt(3)
+            originalControls.add(child)
+        }
+        originalControls.forEachIndexed { index, view ->
+            val target = when (index) {
+                in 0..7 -> connectionsContent
+                in 8..10, 15 -> chatContent
+                in 11..14 -> mediaContent
+                else -> airWaveContent
+            }
+            target.addView(view, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(7)
+            })
+        }
+        // Give the transcript a flexible height inside the chat section.
+        (originalControls.getOrNull(8))?.let { transcriptView ->
+            chatContent.removeView(transcriptView)
+            chatContent.addView(transcriptView, 0, LinearLayout.LayoutParams(-1, dp(0), 1f))
+        }
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+            background = rounded(0xFF0D1925.toInt(), 0xFF20394E.toInt(), 16f)
+        }
+        val pageHost = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) }
+        }
+        listOf(connectionsPage, chatPage, mediaPage, airWavePage).forEach {
+            pageHost.addView(it, FrameLayout.LayoutParams(-1, -1))
+        }
+        fun showSection(selected: Int) {
+            listOf(connectionsPage, chatPage, mediaPage, airWavePage).forEachIndexed { index, view ->
+                view.visibility = if (index == selected) View.VISIBLE else View.GONE
+            }
+            navButtons.forEachIndexed { index, button ->
+                val active = index == selected
+                button.setTextColor(if (active) 0xFF061018.toInt() else 0xFFDCEBFA.toInt())
+                button.background = rounded(
+                    if (active) 0xFF55D9FF.toInt() else 0xFF142333.toInt(),
+                    if (active) 0xFF55D9FF.toInt() else 0xFF29445C.toInt(),
+                    12f
+                )
+            }
+        }
+        val navButtons = listOf("CONNECT", "CHATS", "MEDIA", "AIRWAVE").mapIndexed { index, title ->
+            Button(this).apply {
+                text = title
+                isAllCaps = false
+                textSize = 10f
+                minHeight = dp(44)
+                setPadding(dp(3), dp(8), dp(3), dp(8))
+                stateListAnimator = null
+                nav.addView(this, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    leftMargin = dp(3); rightMargin = dp(3)
+                })
+                setOnClickListener { showSection(index) }
+            }
+        }
+        root.addView(nav, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        root.addView(pageHost)
+        showSection(1)
+        setContentView(root)
         createChatNotificationChannel()
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 43)
