@@ -883,9 +883,11 @@ class MeshChatActivity : Activity(), SensorEventListener {
             val destination = if (resultCode == RESULT_OK) data?.data else null
             if (source != null && destination != null) {
                 try {
-                    contentResolver.openOutputStream(destination)?.use { output ->
+                    val outputStream = contentResolver.openOutputStream(destination)
+                        ?: error("Unable to open the selected destination.")
+                    outputStream.use { output ->
                         source.inputStream().use { input -> input.copyTo(output) }
-                    } ?: error("Unable to open the selected destination.")
+                    }
                     status.text = "Saved to your selected location."
                 } catch (error: Exception) {
                     status.text = "Could not save file: ${error.message ?: "storage error"}"
