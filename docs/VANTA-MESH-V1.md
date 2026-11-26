@@ -24,6 +24,10 @@ Wi-Fi Direct uses a local peer-to-peer group. Android requires the INTERNET perm
 - Received files are stored under the app-private `filesDir/mesh_received` directory, displayed as chat cards, playable in-app when they are audio, and exportable through Android's system document picker.
 - Message text history is encrypted at rest using AES-GCM with an Android Keystore key and retains up to 500 entries.
 
+## Optional camera hand gestures
+
+Enable Hand Gestures explicitly to activate the front camera preview. A stable fist starts voice recording, an open hand stops it, and a lateral open-hand wave sends only when AirWave is armed. Frames are analysed locally in memory and are not saved. The model is packaged in the APK; only the source build downloads it during Gradle preBuild.
+
 ## Notifications
 
 Incoming messages and files can produce Android notifications while the chat activity/session remains alive in the background. This is not an always-on background service. If Android kills the process or the chat session is closed, VANTA cannot receive new messages until the user reconnects.
