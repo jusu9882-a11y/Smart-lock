@@ -448,12 +448,14 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
+        chatVisible = true
         if (airWaveEnabled && airWaveArmed && linearAcceleration != null) {
             sensorManager.registerListener(this, linearAcceleration, SensorManager.SENSOR_DELAY_GAME)
         }
     }
 
     override fun onPause() {
+        chatVisible = false
         disarmAirWave()
         super.onPause()
     }
