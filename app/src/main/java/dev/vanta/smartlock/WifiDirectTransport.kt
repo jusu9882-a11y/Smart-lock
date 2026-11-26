@@ -165,6 +165,11 @@ internal class WifiDirectTransport(
                 try {
                     val server = ServerSocket(8988)
                     serverSocket = server
+                    if (closed) {
+                        server.close()
+                        serverSocket = null
+                        return@thread
+                    }
                     report("Wi-Fi Direct group ready. Waiting for the peer…")
                     val accepted = server.accept()
                     server.close()
@@ -183,15 +188,23 @@ internal class WifiDirectTransport(
                 return
             }
             thread(name = "vanta-wifi-direct-client") {
-                try {
+                var lastError: Exception? = null
+                val deadline = System.currentTimeMillis() + 20_000L
+                while (!closed && System.currentTimeMillis() < deadline) {
                     val client = Socket()
-                    client.connect(InetSocketAddress(address, 8988), 20_000)
-                    if (!closed) main.post { onConnected(client, "Wi-Fi Direct peer") }
-                    else client.close()
-                } catch (error: Exception) {
-                    socketStarted = false
-                    report("Wi-Fi Direct socket failed: ${error.message ?: "connection error"}")
+                    try {
+                        client.connect(InetSocketAddress(address, 8988), 2_500)
+                        if (!closed) main.post { onConnected(client, "Wi-Fi Direct peer") }
+                        else client.close()
+                        return@thread
+                    } catch (error: Exception) {
+                        lastError = error
+                        try { client.close() } catch (_: Exception) {}
+                        try { Thread.sleep(350L) } catch (_: InterruptedException) { break }
+                    }
                 }
+                socketStarted = false
+                report("Wi-Fi Direct socket failed: ${lastError?.message ?: "connection timeout"}")
             }
         }
     }
