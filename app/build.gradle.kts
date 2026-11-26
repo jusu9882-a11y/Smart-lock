@@ -9,7 +9,7 @@ android {
     compileSdk = 35
     defaultConfig {
         applicationId = "dev.vanta.smartlock"
-        minSdk = 26
+        minSdk = 28
         targetSdk = 35
         versionCode = 7
         versionName = "0.7.0"
