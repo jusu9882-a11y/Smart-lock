@@ -83,6 +83,9 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private val history = StringBuilder()
     private var recorder: MediaRecorder? = null
     private var pendingAudioFile: File? = null
+    private var pendingExportFile: File? = null
+    private var previewPlayer: MediaPlayer? = null
+    private var receivedPlayer: MediaPlayer? = null
     private var pendingAttachmentMime: String = "audio/*"
     private var pendingAttachmentName: String = "attachment.bin"
     private var recordingFile: File? = null
