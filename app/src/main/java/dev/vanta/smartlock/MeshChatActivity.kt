@@ -58,6 +58,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
     private lateinit var handGestureButton: Button
     private lateinit var handPreviewContainer: FrameLayout
     private var handGestureController: HandGestureController? = null
+    private var resumeHandGesturesAfterMicPermission = false
     private val airWaveDetector by lazy {
         AirWaveMotionDetector(onWave = {
             if (airWaveArmed) {
@@ -453,12 +454,14 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         try {
             handPreviewContainer.visibility = View.VISIBLE
             handGestureButton.text = "DISABLE HAND GESTURES"
-            handGestureController = HandGestureController(
+            val controller = HandGestureController(
                 this,
                 handPreviewContainer,
                 onGesture = { gesture -> handleHandGesture(gesture) },
                 onStatus = { message -> status.text = message }
-            ).also { it.start() }
+            )
+            handGestureController = controller
+            controller.start()
         } catch (error: Exception) {
             handGestureController?.close()
             handGestureController = null
@@ -476,6 +479,9 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
             handPreviewContainer.removeAllViews()
             handPreviewContainer.visibility = View.GONE
         }
+        if (recorder != null && ::previewAudioButton.isInitialized) {
+            stopVoiceRecording(previewAudioButton, discardAudioButton)
+        }
         if (::handGestureButton.isInitialized) handGestureButton.text = "ENABLE HAND GESTURES (OPTIONAL)"
     }
 
@@ -486,6 +492,10 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                     status.text = "Voice recording is active. Open your hand to stop."
                 } else if (pendingAudioFile != null) {
                     status.text = "Send or discard the current attachment before fist-to-record."
+                } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    resumeHandGesturesAfterMicPermission = true
+                    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 74)
+                    status.text = "Grant microphone permission, then make a fist again."
                 } else {
                     status.text = "Fist detected • starting voice recording."
                     startVoiceRecording()
@@ -574,7 +584,16 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                 status.text = "Camera permission was denied. Hand gestures remain off; touch controls still work."
             }
         } else if (requestCode == 74) {
-            status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Microphone permission granted. Make a fist again to start recording." else "Microphone permission is required for fist-to-record."
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (granted && resumeHandGesturesAfterMicPermission) {
+                resumeHandGesturesAfterMicPermission = false
+                stopHandGestureMode()
+                startHandGestureMode()
+                status.text = "Microphone permission granted. Make a fist again to start recording."
+            } else {
+                resumeHandGesturesAfterMicPermission = false
+                status.text = if (granted) "Microphone permission granted. Tap RECORD VOICE to start." else "Microphone permission is required for voice recording."
+            }
         } else if (requestCode == 43) {
             status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Chat notifications enabled." else "Notifications are disabled. You can enable them in Android settings."
         } else if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
