@@ -27,3 +27,13 @@ A phone's accelerometer/gyroscope cannot reliably tell whether fingers are curle
 
 ## Transport
 Bluetooth remains supported. Wi-Fi Direct is an additional local transport for faster/larger transfers; it does not provide town-to-town connectivity without network infrastructure. Neither transport requires Internet access.
+
+
+## Current implementation status (2026-11-26)
+- Optional phone-wave gesture can arm and send the current chat draft through the existing Bluetooth sender.
+- Touch-based voice recording includes runtime microphone permission, stop, preview, and discard.
+- Android document picker can select a general file; files are copied into app cache and capped at 15 MB.
+- Text and one selected attachment are sent sequentially over the current Bluetooth RFCOMM connection using a line-framed Base64 payload.
+- The receiving app stores received files in its private `filesDir/mesh_received` directory. They are not automatically opened or exported.
+- Camera-based fist/open-hand detection, Wi-Fi Direct, transfer progress/retry, persistent chat history, and device-level integration tests are not yet implemented.
+- This simple line-framed transfer is a first functional file path, not a production-grade resumable or streaming protocol. Both devices must run a compatible VANTA build.
