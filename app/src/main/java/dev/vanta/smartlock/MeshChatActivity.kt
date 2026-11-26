@@ -790,6 +790,19 @@ class MeshChatActivity : Activity(), SensorEventListener {
                 setStroke(dp(1), 0xFF31516B.toInt())
             }
         }
+        fun styleReceivedButton(button: Button, primary: Boolean = false) {
+            button.isAllCaps = false
+            button.textSize = 12f
+            button.minHeight = dp(48)
+            button.setPadding(dp(14), dp(10), dp(14), dp(10))
+            button.setTextColor(if (primary) 0xFF061018.toInt() else 0xFFDCEBFA.toInt())
+            button.background = GradientDrawable().apply {
+                setColor(if (primary) 0xFF55D9FF.toInt() else 0xFF142333.toInt())
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), if (primary) 0xFF55D9FF.toInt() else 0xFF29445C.toInt())
+            }
+            button.stateListAnimator = null
+        }
         val name = TextView(this).apply {
             text = "RECEIVED • ${file.name}\n${mime} • ${file.length() / 1024} KB"
             textSize = 11f
@@ -799,12 +812,12 @@ class MeshChatActivity : Activity(), SensorEventListener {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         if (mime.startsWith("audio/")) {
             val play = Button(this).apply { text = "PLAY" }
-            styleAction(play)
+            styleReceivedButton(play)
             play.setOnClickListener { playReceivedAudio(file) }
             actions.addView(play, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
         }
         val save = Button(this).apply { text = "SAVE TO DEVICE" }
-        styleAction(save, true)
+        styleReceivedButton(save, true)
         save.setOnClickListener { exportReceivedFile(file, mime) }
         actions.addView(save, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
         card.addView(actions)
