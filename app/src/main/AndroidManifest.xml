@@ -21,6 +21,8 @@
 
     <application
         android:label="VANTA MESH"
+        android:icon="@drawable/ic_vanta_mesh"
+        android:roundIcon="@drawable/ic_vanta_mesh"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:allowBackup="false">
         <activity android:name=".MeshChatActivity" android:exported="false" />
