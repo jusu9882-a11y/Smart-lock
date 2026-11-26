@@ -698,8 +698,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
         recorder = null
         recordingFile?.delete()
         recordingFile = null
-        try { socket?.close() } catch (_: Exception) {}
+        try { activeSocket?.close() } catch (_: Exception) {}
+        activeSocket = null
         try { server?.close() } catch (_: Exception) {}
+        if (::wifiTransport.isInitialized) wifiTransport.close()
         super.onDestroy()
     }
 }
