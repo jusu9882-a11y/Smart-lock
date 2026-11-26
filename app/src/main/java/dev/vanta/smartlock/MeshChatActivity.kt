@@ -190,9 +190,11 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
 
                     5. Voice: tap Record Voice, then Stop & Preview. File: tap Attach File. Use Send to transfer.
 
-                    6. AirWave is optional. Enable it, prepare a draft or attachment, then arm it. A deliberate phone wave sends the selected item once. It does not recognise a fist or an open hand.
+                    6. Phone-motion AirWave is optional. Enable it, prepare a draft or attachment, then arm it. A deliberate phone movement sends the selected item once.
 
-                    7. Chat history is encrypted on this phone. Use Clear Chat History to erase it. Incoming notifications work while the chat session remains active in the background.
+                    7. Camera hand gestures are also optional. Tap Enable Hand Gestures and allow camera access. Make a fist to start voice recording, open your hand to stop, and wave your open hand to send an armed item. Camera frames are processed on this phone and are never saved.
+
+                    8. Chat history is encrypted on this phone. Use Clear Chat History to erase it. Incoming notifications work while the chat session remains active in the background.
 
                     VANTA works without mobile data or Internet access. Wi-Fi Direct is local range only; it cannot reach another town without network infrastructure.
                     """.trimIndent()
