@@ -183,6 +183,8 @@ internal class WifiDirectTransport(
                     if (!closed) main.post { onConnected(accepted, "Wi-Fi Direct peer") }
                     else accepted.close()
                 } catch (error: Exception) {
+                    try { serverSocket?.close() } catch (_: Exception) {}
+                    serverSocket = null
                     socketStarted = false
                     report("Wi-Fi Direct host socket failed: ${error.message ?: "connection error"}")
                 }
