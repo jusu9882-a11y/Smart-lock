@@ -33,7 +33,7 @@ Wi-Fi Direct is local-range communication. It does not provide town-to-town mess
 ## Known limitations requiring verification or further work
 
 - Wi-Fi Direct and Bluetooth must be tested with two physical Android phones; CI cannot verify radio discovery, pairing, routing, or transfer.
-- Camera-based hand-pose recognition is not implemented.
+- Camera hand-pose recognition still requires physical testing for fist/open-hand/wave reliability across lighting, hand angles, and camera positions.
 - The current file protocol uses Base64 line frames with a 15 MB limit; it does not yet provide streaming, progress, resume, or integrity checks.
 - Received files are listed in the chat, audio files can be played in-app, and any received file can be exported through Android's system document picker.
 - Notifications are available only while the chat process/session remains alive. There is no always-on background messaging service or store-and-forward relay.
