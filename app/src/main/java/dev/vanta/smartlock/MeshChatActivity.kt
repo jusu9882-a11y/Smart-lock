@@ -3,6 +3,9 @@ package dev.vanta.smartlock
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothServerSocket
@@ -30,6 +33,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.*
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
@@ -70,6 +74,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private var wifiPeerDevices: List<WifiP2pDevice> = emptyList()
     private lateinit var wifiTransport: WifiDirectTransport
     private var activeSocket: Closeable? = null
+    @Volatile private var chatVisible = false
+    private val notificationChannelId = "vanta_mesh_messages"
     private var server: BluetoothServerSocket? = null
     private var writer: PrintWriter? = null
     private val history = StringBuilder()
@@ -271,6 +277,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
             addView(root)
         }
         setContentView(page)
+        createChatNotificationChannel()
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 43)
+        }
         val restoredMessages = MeshChatStore.load(this)
         if (restoredMessages.isNotEmpty()) {
             transcript.removeAllViews()
@@ -372,6 +382,35 @@ class MeshChatActivity : Activity(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private fun createChatNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(notificationChannelId, "VANTA MESH messages", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "Incoming messages and files while a VANTA MESH session is active." }
+            )
+        }
+    }
+
+    private fun notifyIncoming(title: String, body: String) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val openChat = android.content.Intent(this, MeshChatActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val pending = PendingIntent.getActivity(
+            this, 91, openChat, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, notificationChannelId)
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(title)
+            .setContentText(body.take(140))
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(91, notification)
+    }
 
     private fun disarmAirWave() {
         airWaveArmed = false
@@ -479,7 +518,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
                                 val dir = File(filesDir, "mesh_received").apply { mkdirs() }
                                 val received = File(dir, "${System.currentTimeMillis()}_$safeName")
                                 received.writeBytes(bytes)
-                                main.post { append("Peer sent file: ${received.name} • $mime • ${bytes.size / 1024} KB") }
+                                main.post {\n                                    append("Peer sent file: ${received.name} • $mime • ${bytes.size / 1024} KB")\n                                    if (!chatVisible) notifyIncoming("File received", received.name)\n                                }
                             }
                         }
                     } else if (line.startsWith("AUDIO|")) {
@@ -491,12 +530,12 @@ class MeshChatActivity : Activity(), SensorEventListener {
                                 val safeName = parts[1].replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
                                 val received = File(dir, "${System.currentTimeMillis()}_$safeName")
                                 received.writeBytes(bytes)
-                                main.post { append("Peer sent voice note: ${received.name} • ${bytes.size / 1024} KB") }
+                                main.post {\n                                    append("Peer sent voice note: ${received.name} • ${bytes.size / 1024} KB")\n                                    if (!chatVisible) notifyIncoming("Voice note received", received.name)\n                                }
                             }
                         }
                     } else {
                         val message = String(android.util.Base64.decode(line, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                        main.post { append("Peer: $message") }
+                        main.post {\n                            append("Peer: $message")\n                            if (!chatVisible) notifyIncoming("New message", message)\n                        }
                     }
                 }
             } catch (error: Exception) {
