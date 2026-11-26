@@ -22,5 +22,5 @@ The landmark pose classifier is heuristic and has unit coverage for synthetic fi
 - AirWave is disabled by default.
 - It must be explicitly armed for the currently prepared item.
 - It disarms after a trigger and when the chat activity pauses.
-- It only works when the phone provides the required linear-acceleration sensor.
+- Phone-motion detection requires a linear-acceleration sensor. Camera hand-wave sending can be used without that sensor when camera gestures are enabled.
 - The current gesture sends through whichever chat transport is connected.
