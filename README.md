@@ -43,7 +43,7 @@ Wi-Fi Direct is local-range communication. It does not provide town-to-town mess
 
 ## Build
 
-The project uses Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compile SDK 35, and Java 17. GitHub Actions validates the manifest, runs unit tests, builds a debug APK, verifies the APK file, and uploads it as an artifact.
+The project uses Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compile SDK 35, Java 17, and supports Android 9 (API 28) or newer. MediaPipe Tasks requires API 28; Android 8 and older are not supported by this build. GitHub Actions validates the manifest, runs unit tests, builds a debug APK, verifies the APK file, and uploads it as an artifact.
 
 Run from the repository root:
 
