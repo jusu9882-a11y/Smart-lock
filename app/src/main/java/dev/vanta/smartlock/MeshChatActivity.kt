@@ -463,7 +463,10 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                 this,
                 handPreviewContainer,
                 onGesture = { gesture -> handleHandGesture(gesture) },
-                onStatus = { message -> status.text = message }
+                onStatus = { message ->
+                    status.text = message
+                    if (message.startsWith("Could not start hand camera")) stopHandGestureMode()
+                }
             )
             handGestureController = controller
             controller.start()
@@ -517,6 +520,8 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                     status.text = "Hand wave detected • sending the armed item."
                     disarmAirWave()
                     sendMessage()
+                } else if (!airWaveArmed) {
+                    status.text = "Hand wave detected. Arm AirWave before sending."
                 }
             }
         }
