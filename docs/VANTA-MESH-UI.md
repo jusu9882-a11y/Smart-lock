@@ -12,6 +12,6 @@
 ## Outstanding UI/device work
 
 - Rich file/image/document cards and inline voice-note waveform playback are not implemented.
-- Received files do not yet have an in-app open/export control.
+- Received file cards provide audio playback for audio attachments and a Save to Device action using Android's system document picker.
 - Notification display depends on runtime permission and an active chat process.
 - Screen-reader, font scaling, landscape, and OEM layout testing still require physical devices.
