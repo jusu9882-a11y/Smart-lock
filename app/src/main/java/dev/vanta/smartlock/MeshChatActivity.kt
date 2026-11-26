@@ -483,6 +483,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
     private fun stopHandGestureMode() {
         handGestureController?.close()
         handGestureController = null
+        if (linearAcceleration == null && airWaveArmed) disarmAirWave()
         if (::handPreviewContainer.isInitialized) {
             handPreviewContainer.removeAllViews()
             handPreviewContainer.visibility = View.GONE
