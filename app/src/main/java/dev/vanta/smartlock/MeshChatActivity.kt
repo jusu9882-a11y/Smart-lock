@@ -457,6 +457,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
     override fun onPause() {
         chatVisible = false
         disarmAirWave()
+        if (recorder != null) stopVoiceRecording(previewAudioButton, discardAudioButton)
         super.onPause()
     }
 
@@ -625,7 +626,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 74)
             return
         }
-        val file = File(cacheDir, "vanta_voice_${System.currentTimeMillis()}.m4a")
+        val stamp = System.currentTimeMillis()
+        val file = File(cacheDir, "vanta_voice_${stamp}.m4a")
+        pendingAttachmentMime = "audio/mp4"
+        pendingAttachmentName = "voice_${stamp}.m4a"
         try {
             val active = MediaRecorder()
             active.setAudioSource(MediaRecorder.AudioSource.MIC)
