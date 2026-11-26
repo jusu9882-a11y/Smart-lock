@@ -524,7 +524,10 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
             if (!airWaveEnabled) return@setOnClickListener
             if (input.text.toString().isBlank() && pendingAudioFile == null) {
                 status.text = "Write a message or attach a file first, then arm AirWave."
-            } else if (linearAcceleration == null && handGestureController == null) {
+            } else if (!AirWavePolicy.hasGestureInput(
+                    hasMotionSensor = linearAcceleration != null,
+                    handGesturesActive = handGestureController != null
+                )) {
                 status.text = "This phone has no supported motion sensor. Enable camera hand gestures first, then arm AirWave."
             } else {
                 airWaveArmed = true
@@ -682,11 +685,10 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 76) {
-            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED && airWaveEnabled) {
                 startHandGestureMode()
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    status.text = "Hand gestures enabled. Grant microphone permission when you first make a fist to record."
-                }
+            } else if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                status.text = "AirWave is disabled. Enable it before turning on camera gestures."
             } else {
                 status.text = "Camera permission was denied. Hand gestures remain off; touch controls still work."
             }
