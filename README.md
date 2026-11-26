@@ -23,9 +23,12 @@ Android requires the `INTERNET` manifest permission for app TCP sockets, includi
 
 Wi-Fi Direct is local-range communication. It does not provide town-to-town messaging by itself. That would require network infrastructure or physical relays, neither of which is part of this offline-only design.
 
-## AirWave scope
+## Gesture scope
 
-AirWave is opt-in and requires the user to arm a prepared draft or attachment. It detects a deliberate phone movement using the linear-acceleration sensor and sends once. It does **not** recognise a fist or open hand. Reliable fist-to-record and open-hand-to-stop gestures require optional on-device camera hand-pose recognition, which is not yet implemented. Touch recording remains available.
+- Phone-motion AirWave is opt-in and requires the user to arm a prepared draft or attachment before a phone movement can send it.
+- Optional camera hand gestures run locally using a bundled MediaPipe hand-landmark model: make a fist to start voice recording, open the hand to stop, and wave an open hand to send an AirWave-armed item.
+- Camera use is off by default, requires explicit permission, shows a live preview, and processes frames in memory without saving them.
+- Touch recording and touch Send remain available when camera gestures are disabled.
 
 ## Known limitations requiring verification or further work
 
