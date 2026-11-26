@@ -121,9 +121,9 @@ class MeshChatActivity : Activity(), SensorEventListener {
         root.addView(audioRow)
         audioStatus = label("No voice note selected", 11f, 0xFF9EB2C8.toInt())
         root.addView(audioStatus)
-        previewAudioButton = Button(this).apply { text = "PLAY VOICE PREVIEW"; isEnabled = false }
+        previewAudioButton = Button(this).apply { text = "PREVIEW AUDIO"; isEnabled = false }
         root.addView(previewAudioButton)
-        discardAudioButton = Button(this).apply { text = "DISCARD VOICE"; isEnabled = false }
+        discardAudioButton = Button(this).apply { text = "DISCARD ATTACHMENT"; isEnabled = false }
         root.addView(discardAudioButton)
         val send = Button(this).apply { text = "SEND MESSAGE / FILE" }
         root.addView(send)
@@ -465,16 +465,16 @@ class MeshChatActivity : Activity(), SensorEventListener {
                         val count = source.read(buffer)
                         if (count < 0) break
                         total += count
-                        require(total <= audioLimitBytes) { "Audio file exceeds 15 MB." }
+                        require(total <= audioLimitBytes) { "File exceeds the 15 MB transfer limit." }
                         sink.write(buffer, 0, count)
                     }
                 }
-            } ?: error("Unable to open selected audio.")
+            } ?: error("Unable to open selected file.")
             require(target.length() > 0) { "Selected file is empty." }
             pendingAudioFile?.delete()
             pendingAudioFile = target
             pendingAttachmentMime = mime
-            pendingAttachmentName = queryDisplayName(uri) ?: "attachment_${Date.now()}"
+            pendingAttachmentName = queryDisplayName(uri) ?: "attachment_${System.currentTimeMillis()}"
             audioStatus.text = "File attached: ${pendingAttachmentName} • ${target.length() / 1024} KB"
             previewAudioButton.isEnabled = true
             discardAudioButton.isEnabled = true
