@@ -183,7 +183,7 @@ class MainActivity : Activity() {
         row.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
         conversation.addView(row)
         conversation.addView(action("OPEN MESSAGES", true) {
-            startActivity(Intent(this, MeshChatActivity::class.java))
+            startActivity(Intent(this, MeshChatActivity::class.java).putExtra("initial_section", "chat"))
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
         content.addView(conversation, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         addCard(content, "Designed for nearby devices",
