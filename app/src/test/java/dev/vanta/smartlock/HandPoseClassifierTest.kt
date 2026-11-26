@@ -34,7 +34,7 @@ class HandPoseClassifierTest {
     @Test
     fun rejectsAmbiguousFingerPose() {
         val landmarks = points(extended = true).toMutableList()
-        landmarks[8] = HandPoint(landmarks[8].x, 0.39f)
+        landmarks[8] = HandPoint(landmarks[8].x, 0.50f)
         assertEquals(HandPose.UNKNOWN, HandPoseClassifier.classify(landmarks))
     }
 
