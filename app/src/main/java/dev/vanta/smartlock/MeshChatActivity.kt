@@ -163,6 +163,39 @@ class MeshChatActivity : Activity(), SensorEventListener {
         status.setPadding(dp(14), dp(12), dp(14), dp(12))
         status.background = rounded(0xFF101D2A.toInt(), 0xFF29445C.toInt(), 14f)
         root.addView(status, LinearLayout.LayoutParams(-1, -2))
+        val helpButton = Button(this).apply { text = "HOW TO USE VANTA MESH" }
+        styleAction(helpButton)
+        root.addView(helpButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        helpButton.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("VANTA MESH • Quick guide")
+                .setMessage(
+                    "1. Turn on Bluetooth or Wi-Fi on both phones.
+
+" +
+                    "2. Bluetooth: pair both phones in Android Settings. On one phone tap Make discoverable; on the other select the paired phone and tap Connect.
+
+" +
+                    "3. Wi-Fi Direct: grant Nearby Wi-Fi permission on both phones. On one phone tap Host Wi-Fi. On the other tap Find Wi-Fi Peers, select the host, then tap Connect Wi-Fi Peer.
+
+" +
+                    "4. Wait until the status says CONNECTED. Then send text, record a voice note, or attach a file.
+
+" +
+                    "5. Voice: tap Record Voice, then Stop & Preview. File: tap Attach File. Use Send to transfer.
+
+" +
+                    "6. AirWave is optional. Enable it, prepare a draft or attachment, then arm it. A deliberate phone wave sends the selected item once. It does not recognise a fist or an open hand.
+
+" +
+                    "7. Chat history is encrypted on this phone. Use Clear Chat History to erase it. Incoming notifications work while the chat session remains active in the background.
+
+" +
+                    "VANTA works without mobile data or Internet access. Wi-Fi Direct is local range only; it cannot reach another town without network infrastructure."
+                )
+                .setPositiveButton("GOT IT", null)
+                .show()
+        }
         val discover = Button(this).apply { text = "Make discoverable" }
         styleAction(discover)
         root.addView(discover, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
@@ -432,7 +465,9 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+        if (requestCode == 43) {
+            status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Chat notifications enabled." else "Notifications are disabled. You can enable them in Android settings."
+        } else if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             wifiTransport.discover()
             status.text = "Nearby Wi-Fi permission granted."
         } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
