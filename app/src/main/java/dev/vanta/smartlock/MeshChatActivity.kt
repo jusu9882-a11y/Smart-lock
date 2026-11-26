@@ -42,9 +42,10 @@ import java.util.UUID
 import kotlin.concurrent.thread
 
 /**
- * VANTA MESH v1: direct, internet-free, one-to-one chat over Android secure
- * Bluetooth RFCOMM. Android's bonded-device link encryption is used; this is
- * not yet an application-layer end-to-end protocol or a multi-hop mesh.
+ * VANTA MESH: direct offline one-to-one chat over Bluetooth RFCOMM or local
+ * Wi-Fi Direct sockets. Link encryption is provided by Android's bonded
+ * Bluetooth or Wi-Fi Direct group; there is no application-layer E2E protocol
+ * or multi-hop relay.
  */
 class MeshChatActivity : ComponentActivity(), SensorEventListener {
     private val adapter: BluetoothAdapter? by lazy { BluetoothAdapter.getDefaultAdapter() }
@@ -328,9 +329,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         linearAcceleration = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
         if (linearAcceleration == null) {
-            airWaveToggle.isEnabled = false
-            airWaveArmButton.isEnabled = false
-            status.text = "AirWave motion sensor is unavailable on this phone."
+            status.text = "Phone-motion AirWave is unavailable. Optional camera hand-wave sending can still be enabled."
         }
         val page = ScrollView(this).apply {
             setFillViewport(true)
@@ -429,15 +428,19 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         airWaveArmButton.setOnClickListener {
             if (!airWaveEnabled) return@setOnClickListener
             if (input.text.toString().isBlank() && pendingAudioFile == null) {
-                status.text = "Write a message or attach a voice note first, then arm AirWave."
-            } else if (linearAcceleration == null) {
-                status.text = "This phone does not provide the required motion sensor."
+                status.text = "Write a message or attach a file first, then arm AirWave."
+            } else if (linearAcceleration == null && handGestureController == null) {
+                status.text = "Enable camera hand gestures to use hand-wave sending on this phone."
             } else {
                 airWaveArmed = true
                 airWaveDetector.reset()
                 airWaveArmButton.text = "AIRWAVE ARMED • WAVE TO SEND"
-                status.text = "AirWave armed for the current draft or attachment. Wave the phone twice to send."
-                sensorManager.registerListener(this, linearAcceleration, SensorManager.SENSOR_DELAY_GAME)
+                if (linearAcceleration != null) {
+                    sensorManager.registerListener(this, linearAcceleration, SensorManager.SENSOR_DELAY_GAME)
+                    status.text = "AirWave armed. Wave the phone twice or wave your open hand to send."
+                } else {
+                    status.text = "AirWave armed for camera hand-wave sending."
+                }
             }
         }
         if (adapter == null) status.text = "This phone does not support Bluetooth."
