@@ -316,6 +316,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
             transcript.removeAllViews()
             restoredMessages.forEach { item -> append("${item.sender}: ${item.content}", persist = false) }
         }
+        restoreReceivedFiles()
 
         wifiTransport = WifiDirectTransport(
             this,
@@ -460,6 +461,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
         chatVisible = false
         disarmAirWave()
         if (recorder != null) stopVoiceRecording(previewAudioButton, discardAudioButton)
+        previewPlayer?.release()
+        previewPlayer = null
+        receivedPlayer?.release()
+        receivedPlayer = null
         super.onPause()
     }
 
@@ -560,6 +565,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
                                 received.writeBytes(bytes)
                                 main.post {
                                     append("Peer sent file: ${received.name} • $mime • ${bytes.size / 1024} KB")
+                                    addReceivedAttachment(received, mime)
                                     if (!chatVisible) notifyIncoming("File received", received.name)
                                 }
                             }
@@ -575,6 +581,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
                                 received.writeBytes(bytes)
                                 main.post {
                                     append("Peer sent voice note: ${received.name} • ${bytes.size / 1024} KB")
+                                    addReceivedAttachment(received, "audio/mp4")
                                     if (!chatVisible) notifyIncoming("Voice note received", received.name)
                                 }
                             }
@@ -720,18 +727,113 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     private fun playPendingAudio() {
         val file = pendingAudioFile ?: return
-        if (!pendingAttachmentMime.startsWith("audio/")) { audioStatus.text = "Preview is only available for audio files."; return }
+        if (!pendingAttachmentMime.startsWith("audio/")) {
+            audioStatus.text = "Preview is only available for audio files."
+            return
+        }
         try {
-            val player = MediaPlayer()
-            player.setDataSource(file.absolutePath)
-            player.setOnCompletionListener { it.release() }
-            player.setOnErrorListener { mp, _, _ -> mp.release(); true }
-            player.prepare()
-            player.start()
+            previewPlayer?.release()
+            previewPlayer = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnCompletionListener {
+                    it.release()
+                    if (previewPlayer === it) previewPlayer = null
+                    audioStatus.text = "Voice preview finished."
+                }
+                setOnErrorListener { player, _, _ ->
+                    player.release()
+                    if (previewPlayer === player) previewPlayer = null
+                    audioStatus.text = "Voice preview failed."
+                    true
+                }
+                prepare()
+                start()
+            }
             audioStatus.text = "Playing voice preview…"
         } catch (error: Exception) {
+            previewPlayer?.release()
+            previewPlayer = null
             audioStatus.text = "Preview failed: ${error.message ?: "audio error"}"
         }
+    }
+
+    private fun restoreReceivedFiles() {
+        val directory = File(filesDir, "mesh_received")
+        directory.listFiles()?.filter { it.isFile }?.sortedBy { it.lastModified() }?.forEach { file ->
+            val extension = file.extension.lowercase()
+            val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                ?: if (extension == "m4a") "audio/mp4" else "application/octet-stream"
+            addReceivedAttachment(file, mime)
+        }
+    }
+
+    private fun addReceivedAttachment(file: File, mime: String) {
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = GradientDrawable().apply {
+                setColor(0xFF132334.toInt())
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), 0xFF31516B.toInt())
+            }
+        }
+        val name = TextView(this).apply {
+            text = "RECEIVED • ${file.name}\n${mime} • ${file.length() / 1024} KB"
+            textSize = 11f
+            setTextColor(0xFFDCEBFA.toInt())
+        }
+        card.addView(name)
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        if (mime.startsWith("audio/")) {
+            val play = Button(this).apply { text = "PLAY" }
+            styleAction(play)
+            play.setOnClickListener { playReceivedAudio(file) }
+            actions.addView(play, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
+        }
+        val save = Button(this).apply { text = "SAVE TO DEVICE" }
+        styleAction(save, true)
+        save.setOnClickListener { exportReceivedFile(file, mime) }
+        actions.addView(save, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
+        card.addView(actions)
+        transcript.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6); bottomMargin = dp(6) })
+        chatScroll.post { chatScroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun playReceivedAudio(file: File) {
+        try {
+            receivedPlayer?.release()
+            receivedPlayer = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnCompletionListener {
+                    it.release()
+                    if (receivedPlayer === it) receivedPlayer = null
+                }
+                setOnErrorListener { player, _, _ ->
+                    player.release()
+                    if (receivedPlayer === player) receivedPlayer = null
+                    true
+                }
+                prepare()
+                start()
+            }
+            status.text = "Playing received audio: ${file.name}"
+        } catch (error: Exception) {
+            receivedPlayer?.release()
+            receivedPlayer = null
+            status.text = "Audio playback failed: ${error.message ?: "unsupported audio"}"
+        }
+    }
+
+    private fun exportReceivedFile(file: File, mime: String) {
+        pendingExportFile = file
+        val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            type = mime
+            putExtra(android.content.Intent.EXTRA_TITLE, file.name.substringAfter('_', file.name))
+        }
+        startActivityForResult(intent, 75)
     }
 
     private fun queryDisplayName(uri: android.net.Uri): String? {
@@ -745,6 +847,22 @@ class MeshChatActivity : Activity(), SensorEventListener {
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 75) {
+            val source = pendingExportFile
+            val destination = if (resultCode == RESULT_OK) data?.data else null
+            if (source != null && destination != null) {
+                try {
+                    contentResolver.openOutputStream(destination)?.use { output ->
+                        source.inputStream().use { input -> input.copyTo(output) }
+                    } ?: error("Unable to open the selected destination.")
+                    status.text = "Saved to your selected location."
+                } catch (error: Exception) {
+                    status.text = "Could not save file: ${error.message ?: "storage error"}"
+                }
+            }
+            pendingExportFile = null
+            return
+        }
         if (requestCode != 73 || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         val target = File(cacheDir, "vanta_audio_${System.currentTimeMillis()}.audio")
@@ -834,6 +952,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
         activeSocket = null
         try { server?.close() } catch (_: Exception) {}
         if (::wifiTransport.isInitialized) wifiTransport.close()
+        previewPlayer?.release()
+        receivedPlayer?.release()
+        previewPlayer = null
+        receivedPlayer = null
         super.onDestroy()
     }
 }
