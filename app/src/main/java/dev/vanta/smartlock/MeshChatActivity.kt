@@ -606,6 +606,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
         val message = input.text.toString().trim()
         val attachment = pendingAudioFile
         if (message.isEmpty() && attachment == null) return
+        if (sending) return
         val out = writer
         if (out == null || out.checkError()) {
             status.text = "Not connected. Connect to a nearby phone first."
@@ -617,6 +618,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
         val mime = pendingAttachmentMime
         val fileName = pendingAttachmentName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
+        sending = true
         status.text = "Sending over the active local connection…"
         thread(name = "vanta-mesh-send") {
             try {
@@ -636,6 +638,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
                     }
                 }
                 main.post {
+                    sending = false
                     if (!sent) {
                         status.text = "Send failed. Check the connection and try again; your draft is kept."
                     } else {
@@ -653,7 +656,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
                     }
                 }
             } catch (error: Exception) {
-                main.post { status.text = "Send failed: ${error.message ?: "local transfer error"}. Your draft is kept." }
+                main.post {
+                    sending = false
+                    status.text = "Send failed: ${error.message ?: "local transfer error"}. Your draft is kept."
+                }
             }
         }
     }
