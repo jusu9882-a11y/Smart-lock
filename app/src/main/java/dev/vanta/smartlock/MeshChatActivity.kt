@@ -465,7 +465,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                 onGesture = { gesture -> handleHandGesture(gesture) },
                 onStatus = { message ->
                     status.text = message
-                    if (message.startsWith("Could not start hand camera")) stopHandGestureMode()
+                    if (message.startsWith("Could not ")) stopHandGestureMode()
                 }
             )
             handGestureController = controller
