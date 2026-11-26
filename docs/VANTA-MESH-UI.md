@@ -13,5 +13,5 @@
 
 - Rich file/image/document cards and inline voice-note waveform playback are not implemented.
 - Received file cards provide audio playback for audio attachments and a Save to Device action using Android's system document picker.
-- Notification display depends on runtime permission and an active chat process.
+- The optional hand-gesture preview is shown only while camera mode is enabled; fist starts recording, open hand stops, and an armed open-hand wave sends.
 - Screen-reader, font scaling, landscape, and OEM layout testing still require physical devices.
