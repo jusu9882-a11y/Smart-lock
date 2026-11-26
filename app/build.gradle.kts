@@ -51,7 +51,7 @@ val downloadHandLandmarkerModel by tasks.registering {
         fun sha256(file: java.io.File): String =
             java.security.MessageDigest.getInstance("SHA-256")
                 .digest(file.readBytes())
-                .joinToString("") { "%02x".format(it) }
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
         if (handLandmarkerModel.exists() && sha256(handLandmarkerModel) == handLandmarkerSha256) {
             return@doLast
