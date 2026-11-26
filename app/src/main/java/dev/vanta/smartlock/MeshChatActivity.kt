@@ -7,6 +7,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -25,10 +29,26 @@ import kotlin.concurrent.thread
  * Bluetooth RFCOMM. Android's bonded-device link encryption is used; this is
  * not yet an application-layer end-to-end protocol or a multi-hop mesh.
  */
-class MeshChatActivity : Activity() {
+class MeshChatActivity : Activity(), SensorEventListener {
     private val adapter: BluetoothAdapter? by lazy { BluetoothAdapter.getDefaultAdapter() }
     private val uuid: UUID = UUID.fromString("a8f1c2d3-4e5f-4678-9abc-1234567890ab")
     private val main = Handler(Looper.getMainLooper())
+    private lateinit var sensorManager: SensorManager
+    private var linearAcceleration: Sensor? = null
+    private var airWaveEnabled = false
+    private var airWaveArmed = false
+    private lateinit var airWaveArmButton: Button
+    private val airWaveDetector by lazy {
+        AirWaveMotionDetector(onWave = {
+            if (airWaveArmed) {
+                airWaveArmed = false
+                main.post {
+                    airWaveArmButton.text = "ARM AIRWAVE TO SEND"
+                    sendMessage()
+                }
+            }
+        })
+    }
     private lateinit var status: TextView
     private lateinit var transcript: TextView
     private lateinit var input: EditText
@@ -81,6 +101,26 @@ class MeshChatActivity : Activity() {
         root.addView(input)
         val send = Button(this).apply { text = "SEND MESSAGE" }
         root.addView(send)
+        val airWaveToggle = CheckBox(this).apply {
+            text = "Enable optional AirWave gesture"
+            setTextColor(0xFFE7F2FF.toInt())
+            isChecked = getSharedPreferences("vanta_mesh", MODE_PRIVATE)
+                .getBoolean("airwave_enabled", false)
+        }
+        root.addView(airWaveToggle)
+        airWaveEnabled = airWaveToggle.isChecked
+        airWaveArmButton = Button(this).apply {
+            text = "ARM AIRWAVE TO SEND"
+            isEnabled = airWaveEnabled
+        }
+        root.addView(airWaveArmButton)
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        linearAcceleration = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        if (linearAcceleration == null) {
+            airWaveToggle.isEnabled = false
+            airWaveArmButton.isEnabled = false
+            status.text = "AirWave motion sensor is unavailable on this phone."
+        }
         setContentView(root)
 
         discover.setOnClickListener {
@@ -96,10 +136,58 @@ class MeshChatActivity : Activity() {
             }
         }
         connect.setOnClickListener { connectSelected() }
-        send.setOnClickListener { sendMessage() }
+        send.setOnClickListener { disarmAirWave(); sendMessage() }
+        airWaveToggle.setOnCheckedChangeListener { _, enabled ->
+            airWaveEnabled = enabled
+            airWaveArmed = false
+            airWaveArmButton.isEnabled = enabled && linearAcceleration != null
+            airWaveArmButton.text = "ARM AIRWAVE TO SEND"
+            getSharedPreferences("vanta_mesh", MODE_PRIVATE).edit()
+                .putBoolean("airwave_enabled", enabled).apply()
+            if (!enabled) sensorManager.unregisterListener(this)
+        }
+        airWaveArmButton.setOnClickListener {
+            if (!airWaveEnabled) return@setOnClickListener
+            if (input.text.toString().isBlank()) {
+                status.text = "Write a message first, then arm AirWave."
+            } else if (linearAcceleration == null) {
+                status.text = "This phone does not provide the required motion sensor."
+            } else {
+                airWaveArmed = true
+                airWaveDetector.reset()
+                airWaveArmButton.text = "AIRWAVE ARMED • WAVE TO SEND"
+                status.text = "AirWave armed for this text message. Wave the phone twice to send."
+                sensorManager.registerListener(this, linearAcceleration, SensorManager.SENSOR_DELAY_GAME)
+            }
+        }
         if (adapter == null) status.text = "This phone does not support Bluetooth."
         else if (!hasBluetoothPermissions()) requestBluetoothPermissions()
         else refreshPeers()
+    }
+
+    override fun onSensorChanged(event: SensorEvent) {
+        if (!airWaveEnabled || !airWaveArmed || event.sensor.type != Sensor.TYPE_LINEAR_ACCELERATION) return
+        airWaveDetector.onLinearAcceleration(event.values[0], event.values[1], event.values[2], event.timestamp)
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private fun disarmAirWave() {
+        airWaveArmed = false
+        if (::airWaveArmButton.isInitialized) airWaveArmButton.text = "ARM AIRWAVE TO SEND"
+        if (::sensorManager.isInitialized) sensorManager.unregisterListener(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (airWaveEnabled && airWaveArmed && linearAcceleration != null) {
+            sensorManager.registerListener(this, linearAcceleration, SensorManager.SENSOR_DELAY_GAME)
+        }
+    }
+
+    override fun onPause() {
+        disarmAirWave()
+        super.onPause()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -206,6 +294,7 @@ class MeshChatActivity : Activity() {
     }
 
     override fun onDestroy() {
+        disarmAirWave()
         try { socket?.close() } catch (_: Exception) {}
         try { server?.close() } catch (_: Exception) {}
         super.onDestroy()
