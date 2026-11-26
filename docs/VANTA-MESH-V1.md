@@ -21,7 +21,7 @@ Wi-Fi Direct uses a local peer-to-peer group. Android requires the INTERNET perm
 - Text messages are Base64-encoded and exchanged over the active local socket.
 - Voice recording is started and stopped with touch controls. The completed recording can be previewed before sending.
 - The Android document picker can select general files. The current per-file limit is 15 MB.
-- Received files are stored under the app-private `filesDir/mesh_received` directory.
+- Received files are stored under the app-private `filesDir/mesh_received` directory, displayed as chat cards, playable in-app when they are audio, and exportable through Android's system document picker.
 - Message text history is encrypted at rest using AES-GCM with an Android Keystore key and retains up to 500 entries.
 
 ## Notifications
