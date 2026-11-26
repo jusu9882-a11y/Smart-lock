@@ -203,7 +203,7 @@ class MainActivity : Activity() {
         addCard(content, "Wi-Fi Direct",
             "Create a local peer-to-peer Wi-Fi group or discover a nearby host. This is still offline and does not use an Internet connection.")
         content.addView(action("OPEN CONNECTION MANAGER", true) {
-            startActivity(Intent(this, MeshChatActivity::class.java))
+            startActivity(Intent(this, MeshChatActivity::class.java).putExtra("initial_section", "connect"))
         }, LinearLayout.LayoutParams(-1, -2))
     }
 
@@ -236,7 +236,7 @@ class MainActivity : Activity() {
         addCard(content, "Camera hand gestures",
             "The optional camera mode supports making a fist to start voice recording, opening the hand to stop, and waving to send an armed item. Camera permission is requested only when you enable this mode.")
         content.addView(action("CONFIGURE AIRWAVE IN CHAT") {
-            startActivity(Intent(this, MeshChatActivity::class.java))
+            startActivity(Intent(this, MeshChatActivity::class.java).putExtra("initial_section", "airwave"))
         }, LinearLayout.LayoutParams(-1, -2))
     }
 
