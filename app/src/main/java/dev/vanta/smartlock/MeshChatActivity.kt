@@ -7,6 +7,9 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.pm.PackageManager
+import android.net.wifi.p2p.WifiP2pDevice
+import java.net.Socket
+import java.io.Closeable
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -62,7 +65,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private lateinit var chatScroll: ScrollView
     private lateinit var input: EditText
     private lateinit var peers: Spinner
-    private var socket: BluetoothSocket? = null
+    private lateinit var wifiPeers: Spinner
+    private var wifiPeerDevices: List<WifiP2pDevice> = emptyList()
+    private lateinit var wifiTransport: WifiDirectTransport
+    private var activeSocket: Closeable? = null
     private var server: BluetoothServerSocket? = null
     private var writer: PrintWriter? = null
     private val history = StringBuilder()
@@ -159,6 +165,23 @@ class MeshChatActivity : Activity(), SensorEventListener {
         val connect = Button(this).apply { text = "Connect to paired device" }
         styleAction(connect, true)
         root.addView(connect, LinearLayout.LayoutParams(-1, -2))
+        val wifiTitle = label("WI-FI DIRECT • LOCAL ONLY", 10f, 0xFF55D9FF.toInt())
+        wifiTitle.setPadding(dp(4), dp(14), dp(4), dp(6))
+        root.addView(wifiTitle)
+        wifiPeers = Spinner(this)
+        wifiPeers.setPadding(dp(8), dp(8), dp(8), dp(8))
+        root.addView(wifiPeers, LinearLayout.LayoutParams(-1, -2))
+        val wifiActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val wifiDiscover = Button(this).apply { text = "FIND WI-FI PEERS" }
+        val wifiHost = Button(this).apply { text = "HOST WI-FI" }
+        styleAction(wifiDiscover)
+        styleAction(wifiHost)
+        wifiActions.addView(wifiDiscover, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
+        wifiActions.addView(wifiHost, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
+        root.addView(wifiActions)
+        val wifiConnect = Button(this).apply { text = "CONNECT WI-FI PEER" }
+        styleAction(wifiConnect, true)
+        root.addView(wifiConnect, LinearLayout.LayoutParams(-1, -2))
         transcript = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(14), dp(12), dp(14))
@@ -232,6 +255,36 @@ class MeshChatActivity : Activity(), SensorEventListener {
             addView(root)
         }
         setContentView(page)
+
+        wifiTransport = WifiDirectTransport(
+            this,
+            onPeers = { found ->
+                wifiPeerDevices = found
+                val labels = found.map { "${it.deviceName.ifBlank { "VANTA device" }} • ${it.deviceAddress}" }
+                wifiPeers.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+                if (found.isNotEmpty()) status.text = "Found ${found.size} Wi-Fi Direct peer(s). Select one to connect."
+                else status.text = "No Wi-Fi Direct peers found yet. Keep both phones' Wi-Fi Direct discovery active."
+            },
+            onConnected = { connected, peerName -> attachTcp(connected, peerName) },
+            onStatus = { status.text = it }
+        )
+        wifiTransport.register()
+        fun requestWifiPermission(): Boolean {
+            if (wifiTransport.hasPermission()) return true
+            val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES
+                else Manifest.permission.ACCESS_FINE_LOCATION
+            ActivityCompat.requestPermissions(this, arrayOf(permission), 42)
+            status.text = "Grant nearby Wi-Fi permission to use Wi-Fi Direct."
+            return false
+        }
+        wifiDiscover.setOnClickListener { if (requestWifiPermission()) wifiTransport.discover() }
+        wifiHost.setOnClickListener { if (requestWifiPermission()) wifiTransport.createGroup() }
+        wifiConnect.setOnClickListener {
+            if (!requestWifiPermission()) return@setOnClickListener
+            val selected = wifiPeerDevices.getOrNull(wifiPeers.selectedItemPosition)
+            if (selected == null) status.text = "Find a Wi-Fi Direct peer first."
+            else wifiTransport.connect(selected)
+        }
 
         discover.setOnClickListener {
             if (!hasBluetoothPermissions()) { requestBluetoothPermissions(); return@setOnClickListener }
@@ -319,7 +372,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+        if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {\n            wifiTransport.discover()\n            status.text = "Nearby Wi-Fi permission granted."\n        } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             refreshPeers()
             status.text = "Bluetooth permissions granted. Pair devices in Android settings."
         } else status.text = "Bluetooth permissions are required for nearby chat."
@@ -368,17 +421,31 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
     }
 
-    @Synchronized private fun attach(connected: BluetoothSocket) {
-        try { socket?.close() } catch (_: Exception) {}
-        socket = connected
-        writer = PrintWriter(connected.outputStream, true)
+    private fun attach(connected: BluetoothSocket) {
+        attachStreams(connected.inputStream, connected.outputStream, connected,
+            connected.remoteDevice.name ?: "Bluetooth peer")
+    }
+
+    private fun attachTcp(connected: Socket, peerName: String) {
+        attachStreams(connected.getInputStream(), connected.getOutputStream(), connected, peerName)
+    }
+
+    @Synchronized private fun attachStreams(
+        inputStream: java.io.InputStream,
+        outputStream: java.io.OutputStream,
+        connected: Closeable,
+        peerName: String
+    ) {
+        try { activeSocket?.close() } catch (_: Exception) {}
+        activeSocket = connected
+        writer = PrintWriter(outputStream, true)
         main.post {
-            status.text = "CONNECTED • ${connected.remoteDevice.name ?: "VANTA peer"}"
-            append("System: secure Bluetooth connection established.")
+            status.text = "CONNECTED • $peerName"
+            append("System: secure local connection established.")
         }
         thread(name = "vanta-mesh-reader") {
             try {
-                val reader = BufferedReader(InputStreamReader(connected.inputStream, Charsets.UTF_8))
+                val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8))
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.startsWith("FILE|")) {
@@ -394,18 +461,33 @@ class MeshChatActivity : Activity(), SensorEventListener {
                                 main.post { append("Peer sent file: ${received.name} • $mime • ${bytes.size / 1024} KB") }
                             }
                         }
+                    } else if (line.startsWith("AUDIO|")) {
+                        val parts = line.split('|', limit = 3)
+                        if (parts.size == 3 && parts[2].length <= 21_000_000) {
+                            val bytes = android.util.Base64.decode(parts[2], android.util.Base64.DEFAULT)
+                            if (bytes.size in 1..audioLimitBytes.toInt()) {
+                                val dir = File(filesDir, "mesh_received").apply { mkdirs() }
+                                val safeName = parts[1].replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
+                                val received = File(dir, "${System.currentTimeMillis()}_$safeName")
+                                received.writeBytes(bytes)
+                                main.post { append("Peer sent voice note: ${received.name} • ${bytes.size / 1024} KB") }
+                            }
+                        }
                     } else {
                         val message = String(android.util.Base64.decode(line, android.util.Base64.DEFAULT), Charsets.UTF_8)
                         main.post { append("Peer: $message") }
                     }
                 }
-            } catch (_: Exception) { }
+            } catch (error: Exception) {
+                main.post { if (activeSocket === connected) status.text = "Connection interrupted: ${error.message ?: "transfer error"}" }
+            }
             main.post {
-                if (socket === connected) {
+                if (activeSocket === connected) {
                     status.text = "DISCONNECTED • reconnect to continue"
                     append("System: connection closed.")
-                    socket = null
+                    activeSocket = null
                     writer = null
+                    try { connected.close() } catch (_: Exception) {}
                 }
             }
         }
