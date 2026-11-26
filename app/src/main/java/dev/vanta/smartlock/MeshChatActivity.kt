@@ -2,6 +2,7 @@ package dev.vanta.smartlock
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothServerSocket
@@ -197,6 +198,21 @@ class MeshChatActivity : Activity(), SensorEventListener {
             addView(transcript)
         }
         root.addView(chatScroll, LinearLayout.LayoutParams(-1, dp(240)).apply { topMargin = dp(8); bottomMargin = dp(12) })
+        val clearHistory = Button(this).apply { text = "CLEAR CHAT HISTORY" }
+        styleAction(clearHistory)
+        root.addView(clearHistory, LinearLayout.LayoutParams(-1, -2))
+        clearHistory.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Clear chat history?")
+                .setMessage("This permanently clears the encrypted message history stored on this phone.")
+                .setNegativeButton("CANCEL", null)
+                .setPositiveButton("CLEAR") { _, _ ->
+                    MeshChatStore.clear(this)
+                    transcript.removeAllViews()
+                    append("System: chat history cleared.", persist = false)
+                }
+                .show()
+        }
         input = EditText(this).apply {
             hint = "Write a message…"
             setTextColor(0xFFE7F2FF.toInt())
@@ -255,6 +271,11 @@ class MeshChatActivity : Activity(), SensorEventListener {
             addView(root)
         }
         setContentView(page)
+        val restoredMessages = MeshChatStore.load(this)
+        if (restoredMessages.isNotEmpty()) {
+            transcript.removeAllViews()
+            restoredMessages.forEach { item -> append("${item.sender}: ${item.content}", persist = false) }
+        }
 
         wifiTransport = WifiDirectTransport(
             this,
@@ -650,13 +671,18 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
     }
 
-    private fun append(line: String) {
+    private fun append(line: String, persist: Boolean = true) {
         history.append(line).append('\n')
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
         val isMine = line.startsWith("You:")
         val isPeer = line.startsWith("Peer:")
         val isSystem = line.startsWith("System:")
+        if (persist && (isMine || isPeer)) {
+            val sender = if (isMine) "You" else "Peer"
+            val content = line.removePrefix("You: ").removePrefix("Peer: ")
+            MeshChatStore.add(this, sender, content)
+        }
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = when {
