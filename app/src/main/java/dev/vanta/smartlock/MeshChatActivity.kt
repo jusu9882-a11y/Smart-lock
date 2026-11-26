@@ -386,7 +386,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         listOf(connectionsPage, chatPage, mediaPage, airWavePage).forEach {
             pageHost.addView(it, FrameLayout.LayoutParams(-1, -1))
         }
-        lateinit var navButtons: List<Button>
+        val navButtons = mutableListOf<Button>()
         fun showSection(selected: Int) {
             listOf(connectionsPage, chatPage, mediaPage, airWavePage).forEachIndexed { index, view ->
                 view.visibility = if (index == selected) View.VISIBLE else View.GONE
@@ -401,19 +401,20 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                 )
             }
         }
-        navButtons = listOf("CONNECT", "CHATS", "MEDIA", "AIRWAVE").mapIndexed { index, title ->
-            Button(this).apply {
+        listOf("CONNECT", "CHATS", "MEDIA", "AIRWAVE").forEachIndexed { index, title ->
+            val button = Button(this).apply {
                 text = title
                 isAllCaps = false
                 textSize = 10f
                 minHeight = dp(44)
                 setPadding(dp(3), dp(8), dp(3), dp(8))
                 stateListAnimator = null
-                nav.addView(this, LinearLayout.LayoutParams(0, -2, 1f).apply {
-                    leftMargin = dp(3); rightMargin = dp(3)
-                })
                 setOnClickListener { showSection(index) }
             }
+            navButtons.add(button)
+            nav.addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                leftMargin = dp(3); rightMargin = dp(3)
+            })
         }
         root.addView(nav, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         root.addView(pageHost)
