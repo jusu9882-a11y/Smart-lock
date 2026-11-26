@@ -226,10 +226,10 @@ internal class WifiDirectTransport(
 
     private fun findP2pInterfaceAddress(): Inet4Address? {
         return try {
-            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
-            interfaces.toList()
+            val enumeration = NetworkInterface.getNetworkInterfaces() ?: return null
+            java.util.Collections.list(enumeration)
                 .filter { it.isUp && it.name.contains("p2p", ignoreCase = true) }
-                .flatMap { it.inetAddresses.toList() }
+                .flatMap { java.util.Collections.list(it.inetAddresses) }
                 .filterIsInstance<Inet4Address>()
                 .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
         } catch (_: Exception) {
