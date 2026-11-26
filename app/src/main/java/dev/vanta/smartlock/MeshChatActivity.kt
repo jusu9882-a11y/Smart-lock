@@ -372,7 +372,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         // Give the transcript a flexible height inside the chat section.
         (originalControls.getOrNull(8))?.let { transcriptView ->
             chatContent.removeView(transcriptView)
-            chatContent.addView(transcriptView, 0, LinearLayout.LayoutParams(-1, dp(0), 1f))
+            chatContent.addView(transcriptView, 0, LinearLayout.LayoutParams(-1, dp(300)))
         }
         val nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -386,6 +386,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         listOf(connectionsPage, chatPage, mediaPage, airWavePage).forEach {
             pageHost.addView(it, FrameLayout.LayoutParams(-1, -1))
         }
+        lateinit var navButtons: List<Button>
         fun showSection(selected: Int) {
             listOf(connectionsPage, chatPage, mediaPage, airWavePage).forEachIndexed { index, view ->
                 view.visibility = if (index == selected) View.VISIBLE else View.GONE
@@ -400,7 +401,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                 )
             }
         }
-        val navButtons = listOf("CONNECT", "CHATS", "MEDIA", "AIRWAVE").mapIndexed { index, title ->
+        navButtons = listOf("CONNECT", "CHATS", "MEDIA", "AIRWAVE").mapIndexed { index, title ->
             Button(this).apply {
                 text = title
                 isAllCaps = false
