@@ -59,7 +59,6 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
     private lateinit var handGestureButton: Button
     private lateinit var handPreviewContainer: FrameLayout
     private var handGestureController: HandGestureController? = null
-    private var resumeHandGesturesAfterMicPermission = false
     private val airWaveDetector by lazy {
         AirWaveMotionDetector(onWave = {
             if (airWaveArmed) {
@@ -313,12 +312,16 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         }
         root.addView(handPreviewContainer, LinearLayout.LayoutParams(-1, dp(210)).apply { topMargin = dp(8) })
         handGestureButton.setOnClickListener {
+            if (!airWaveEnabled) {
+                status.text = "Enable AirWave first to use optional camera gestures."
+                return@setOnClickListener
+            }
             if (handGestureController != null) {
                 stopHandGestureMode()
             } else if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(
                     this,
-                    arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
+                    arrayOf(Manifest.permission.CAMERA),
                     76
                 )
                 status.text = "Grant camera permission to enable optional hand gestures. Microphone access is used only when a fist starts voice recording."
@@ -507,8 +510,12 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
         airWaveToggle.setOnCheckedChangeListener { _, enabled ->
             airWaveEnabled = enabled
             airWaveArmed = false
-            airWaveArmButton.isEnabled = enabled && linearAcceleration != null
+            airWaveArmButton.isEnabled = enabled
             airWaveArmButton.text = "ARM AIRWAVE TO SEND"
+            if (!enabled) {
+                disarmAirWave()
+                stopHandGestureMode()
+            }
             getSharedPreferences("vanta_mesh", MODE_PRIVATE).edit()
                 .putBoolean("airwave_enabled", enabled).apply()
             if (!enabled) sensorManager.unregisterListener(this)
@@ -518,7 +525,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
             if (input.text.toString().isBlank() && pendingAudioFile == null) {
                 status.text = "Write a message or attach a file first, then arm AirWave."
             } else if (linearAcceleration == null && handGestureController == null) {
-                status.text = "Enable camera hand gestures to use hand-wave sending on this phone."
+                status.text = "This phone has no supported motion sensor. Enable camera hand gestures first, then arm AirWave."
             } else {
                 airWaveArmed = true
                 airWaveDetector.reset()
@@ -585,12 +592,12 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
     private fun handleHandGesture(gesture: HandGesture) {
         when (gesture) {
             HandGesture.FIST -> {
+                if (!airWaveEnabled || handGestureController == null) return
                 if (recorder != null) {
                     status.text = "Voice recording is active. Open your hand to stop."
                 } else if (pendingAudioFile != null) {
                     status.text = "Send or discard the current attachment before fist-to-record."
                 } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    resumeHandGesturesAfterMicPermission = true
                     ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 74)
                     status.text = "Grant microphone permission, then make a fist again."
                 } else {
@@ -599,13 +606,14 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
                 }
             }
             HandGesture.OPEN_HAND -> {
+                if (!airWaveEnabled || handGestureController == null) return
                 if (recorder != null) {
                     stopVoiceRecording(previewAudioButton, discardAudioButton)
                     status.text = "Open hand detected • voice recording stopped."
                 }
             }
             HandGesture.WAVE -> {
-                if (airWaveArmed && recorder == null) {
+                if (airWaveEnabled && airWaveArmed && recorder == null) {
                     status.text = "Hand wave detected • sending the armed item."
                     disarmAirWave()
                     sendMessage()
@@ -684,15 +692,7 @@ class MeshChatActivity : ComponentActivity(), SensorEventListener {
             }
         } else if (requestCode == 74) {
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
-            if (granted && resumeHandGesturesAfterMicPermission) {
-                resumeHandGesturesAfterMicPermission = false
-                stopHandGestureMode()
-                startHandGestureMode()
-                status.text = "Microphone permission granted. Make a fist again to start recording."
-            } else {
-                resumeHandGesturesAfterMicPermission = false
-                status.text = if (granted) "Microphone permission granted. Tap RECORD VOICE to start." else "Microphone permission is required for voice recording."
-            }
+            status.text = if (granted) "Microphone permission granted. Make a fist again to start recording." else "Microphone permission is required for voice recording."
         } else if (requestCode == 43) {
             status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Chat notifications enabled." else "Notifications are disabled. You can enable them in Android settings."
         } else if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
