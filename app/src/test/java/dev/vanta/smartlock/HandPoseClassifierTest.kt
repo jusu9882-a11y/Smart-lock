@@ -30,4 +30,19 @@ class HandPoseClassifierTest {
         }
         return result
     }
+
+    @Test
+    fun rejectsAmbiguousFingerPose() {
+        val landmarks = points(extended = true).toMutableList()
+        landmarks[8] = HandPoint(landmarks[8].x, 0.39f)
+        assertEquals(HandPose.UNKNOWN, HandPoseClassifier.classify(landmarks))
+    }
+
+    @Test
+    fun classificationIsInvariantToUniformScaleAndRotation() {
+        val transformed = points(extended = true).map { point ->
+            HandPoint(-point.y * 2f + 3f, point.x * 2f - 1f)
+        }
+        assertEquals(HandPose.OPEN_HAND, HandPoseClassifier.classify(transformed))
+    }
 }
