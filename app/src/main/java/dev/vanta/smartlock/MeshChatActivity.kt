@@ -1,7 +1,6 @@
 package dev.vanta.smartlock
 
 import android.Manifest
-import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -32,6 +31,7 @@ import java.io.FileOutputStream
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import java.io.BufferedReader
@@ -46,7 +46,7 @@ import kotlin.concurrent.thread
  * Bluetooth RFCOMM. Android's bonded-device link encryption is used; this is
  * not yet an application-layer end-to-end protocol or a multi-hop mesh.
  */
-class MeshChatActivity : Activity(), SensorEventListener {
+class MeshChatActivity : ComponentActivity(), SensorEventListener {
     private val adapter: BluetoothAdapter? by lazy { BluetoothAdapter.getDefaultAdapter() }
     private val uuid: UUID = UUID.fromString("a8f1c2d3-4e5f-4678-9abc-1234567890ab")
     private val main = Handler(Looper.getMainLooper())
@@ -55,6 +55,9 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private var airWaveEnabled = false
     private var airWaveArmed = false
     private lateinit var airWaveArmButton: Button
+    private lateinit var handGestureButton: Button
+    private lateinit var handPreviewContainer: FrameLayout
+    private var handGestureController: HandGestureController? = null
     private val airWaveDetector by lazy {
         AirWaveMotionDetector(onWave = {
             if (airWaveArmed) {
@@ -297,6 +300,28 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
         styleAction(airWaveArmButton)
         root.addView(airWaveArmButton, LinearLayout.LayoutParams(-1, -2))
+        handGestureButton = Button(this).apply { text = "ENABLE HAND GESTURES (OPTIONAL)" }
+        styleAction(handGestureButton)
+        root.addView(handGestureButton, LinearLayout.LayoutParams(-1, -2))
+        handPreviewContainer = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(0xFF050A10.toInt())
+        }
+        root.addView(handPreviewContainer, LinearLayout.LayoutParams(-1, dp(210)).apply { topMargin = dp(8) })
+        handGestureButton.setOnClickListener {
+            if (handGestureController != null) {
+                stopHandGestureMode()
+            } else if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
+                    76
+                )
+                status.text = "Grant camera permission to enable optional hand gestures. Microphone access is used only when a fist starts voice recording."
+            } else {
+                startHandGestureMode()
+            }
+        }
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         linearAcceleration = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
         if (linearAcceleration == null) {
@@ -424,6 +449,64 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
+    private fun startHandGestureMode() {
+        try {
+            handPreviewContainer.visibility = View.VISIBLE
+            handGestureButton.text = "DISABLE HAND GESTURES"
+            handGestureController = HandGestureController(
+                this,
+                handPreviewContainer,
+                onGesture = { gesture -> handleHandGesture(gesture) },
+                onStatus = { message -> status.text = message }
+            ).also { it.start() }
+        } catch (error: Exception) {
+            handGestureController?.close()
+            handGestureController = null
+            handPreviewContainer.removeAllViews()
+            handPreviewContainer.visibility = View.GONE
+            handGestureButton.text = "ENABLE HAND GESTURES (OPTIONAL)"
+            status.text = "Could not enable hand gestures: ${error.message ?: "camera or model unavailable"}"
+        }
+    }
+
+    private fun stopHandGestureMode() {
+        handGestureController?.close()
+        handGestureController = null
+        if (::handPreviewContainer.isInitialized) {
+            handPreviewContainer.removeAllViews()
+            handPreviewContainer.visibility = View.GONE
+        }
+        if (::handGestureButton.isInitialized) handGestureButton.text = "ENABLE HAND GESTURES (OPTIONAL)"
+    }
+
+    private fun handleHandGesture(gesture: HandGesture) {
+        when (gesture) {
+            HandGesture.FIST -> {
+                if (recorder != null) {
+                    status.text = "Voice recording is active. Open your hand to stop."
+                } else if (pendingAudioFile != null) {
+                    status.text = "Send or discard the current attachment before fist-to-record."
+                } else {
+                    status.text = "Fist detected • starting voice recording."
+                    startVoiceRecording()
+                }
+            }
+            HandGesture.OPEN_HAND -> {
+                if (recorder != null) {
+                    stopVoiceRecording(previewAudioButton, discardAudioButton)
+                    status.text = "Open hand detected • voice recording stopped."
+                }
+            }
+            HandGesture.WAVE -> {
+                if (airWaveArmed && recorder == null) {
+                    status.text = "Hand wave detected • sending the armed item."
+                    disarmAirWave()
+                    sendMessage()
+                }
+            }
+        }
+    }
+
     private fun createChatNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NotificationManager::class.java)
@@ -470,6 +553,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
     override fun onPause() {
         chatVisible = false
         disarmAirWave()
+        stopHandGestureMode()
         if (recorder != null) stopVoiceRecording(previewAudioButton, discardAudioButton)
         previewPlayer?.release()
         previewPlayer = null
@@ -480,8 +564,17 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 74) {
-            status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Microphone permission granted. Tap RECORD VOICE again." else "Microphone permission is required to record voice notes."
+        if (requestCode == 76) {
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                startHandGestureMode()
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    status.text = "Hand gestures enabled. Grant microphone permission when you first make a fist to record."
+                }
+            } else {
+                status.text = "Camera permission was denied. Hand gestures remain off; touch controls still work."
+            }
+        } else if (requestCode == 74) {
+            status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Microphone permission granted. Make a fist again to start recording." else "Microphone permission is required for fist-to-record."
         } else if (requestCode == 43) {
             status.text = if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) "Chat notifications enabled." else "Notifications are disabled. You can enable them in Android settings."
         } else if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
@@ -975,6 +1068,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        stopHandGestureMode()
         disarmAirWave()
         try { recorder?.stop() } catch (_: Exception) {}
         recorder?.release()
