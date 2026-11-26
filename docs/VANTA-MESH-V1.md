@@ -1,34 +1,50 @@
-# VANTA MESH v1 — direct offline chat
+# VANTA MESH — offline chat
 
-## What this milestone does
-- Uses Android secure Bluetooth RFCOMM sockets for a direct, one-to-one connection.
-- Works without mobile data, Wi-Fi internet, an account, or Google Play services.
-- Uses Android Bluetooth bonding for peer authentication and link encryption.
-- Does not add INTERNET permission or send data to a server.
+## Available transports
 
-## Pair and connect two phones
-1. On both phones, turn Bluetooth on in Android Settings.
-2. Pair the two phones using Android Bluetooth settings.
-3. Open VANTA on the receiving phone and tap **VANTA MESH / OFFLINE CHAT**.
-4. Tap **MAKE THIS PHONE DISCOVERABLE** and accept Android's discoverability prompt.
-5. Leave the receiving phone on the MESH screen while the listener waits.
-6. On the sending phone, open MESH, select the paired receiving phone, and tap **CONNECT TO PAIRED DEVICE**.
-7. Once the status says CONNECTED on both ends, exchange text messages.
+### Bluetooth
+- Pair the two phones in Android Bluetooth settings.
+- On the receiving phone, open VANTA MESH and tap **Make discoverable**.
+- On the sending phone, select the paired device and tap **Connect to paired device**.
+- Both phones must run a compatible VANTA build.
 
-## Current limits
-- One direct connection at a time; no group chat or multi-hop forwarding.
-- Both phones must remain in range and the MESH activity must remain alive.
-- Messages and transcript are memory-only; closing the screen clears the transcript.
-- Pairing is managed by Android Settings, not by an in-app QR/fingerprint flow.
-- Secure RFCOMM relies on Android's bonded Bluetooth link security. A separate app-layer E2E protocol and verified identity fingerprints are still required before treating this as a high-assurance private messenger.
-- The app does not currently provide durable offline queues, read receipts, or background delivery.
+### Wi-Fi Direct
+- Turn on Wi-Fi on both phones and grant Nearby Wi-Fi permission when requested.
+- On the hosting phone, tap **Host Wi-Fi**.
+- On the other phone, tap **Find Wi-Fi Peers**, select the host, then tap **Connect Wi-Fi Peer**.
+- Wait for the connection status before sending.
 
-## Manual verification checklist
-- [ ] Two Android phones pair successfully in Android Settings.
-- [ ] Receiver grants Bluetooth permissions and enables discoverability.
-- [ ] Receiver listener accepts a connection from the sender.
-- [ ] Sender and receiver both display CONNECTED.
-- [ ] Unicode and punctuation messages arrive intact in both directions.
-- [ ] Closing either screen closes the session and the other side reports disconnection.
-- [ ] With mobile data and Wi-Fi internet disabled, chat still works over Bluetooth.
-- [ ] Bluetooth permission denial produces a clear status instead of a crash.
+Wi-Fi Direct uses a local peer-to-peer group. Android requires the INTERNET permission to open TCP sockets, but the app connects only to the negotiated local group-owner address; it does not contact a public host or server. Wi-Fi Direct does not reach other towns without network infrastructure.
+
+## Messaging and attachments
+
+- Text messages are Base64-encoded and exchanged over the active local socket.
+- Voice recording is started and stopped with touch controls. The completed recording can be previewed before sending.
+- The Android document picker can select general files. The current per-file limit is 15 MB.
+- Received files are stored under the app-private `filesDir/mesh_received` directory.
+- Message text history is encrypted at rest using AES-GCM with an Android Keystore key and retains up to 500 entries.
+
+## Notifications
+
+Incoming messages and files can produce Android notifications while the chat activity/session remains alive in the background. This is not an always-on background service. If Android kills the process or the chat session is closed, VANTA cannot receive new messages until the user reconnects.
+
+## Current limitations
+
+- The current line-framed Base64 file protocol has a 15 MB cap and no streaming, progress, resume, or integrity verification.
+- Received attachments do not yet have an in-app export/open workflow.
+- Attachment and voice payloads are not part of the persistent text history.
+- No multi-hop relay, store-and-forward queue, group chat, or long-distance offline mode.
+- Camera fist/open-hand recognition is not implemented.
+- Bluetooth and Wi-Fi Direct require two-device physical testing across supported Android versions.
+
+## Required physical test checklist
+
+- [ ] Pair two Android phones and exchange text in both directions over Bluetooth.
+- [ ] Transfer a voice note and a general file in both directions over Bluetooth.
+- [ ] Disable mobile data and Wi-Fi internet; verify Bluetooth still works.
+- [ ] Discover and connect the two phones over Wi-Fi Direct.
+- [ ] Exchange text, voice, and files over Wi-Fi Direct.
+- [ ] Verify reconnect behavior after either phone disconnects.
+- [ ] Verify notification permission, foreground suppression, and background notification behavior.
+- [ ] Restart the app and verify encrypted text history remains available.
+- [ ] Test Android 8 through current supported Android releases and multiple screen sizes.
