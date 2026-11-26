@@ -63,6 +63,8 @@ class MeshChatActivity : Activity(), SensorEventListener {
     private val history = StringBuilder()
     private var recorder: MediaRecorder? = null
     private var pendingAudioFile: File? = null
+    private var pendingAttachmentMime: String = "audio/*"
+    private var pendingAttachmentName: String = "attachment.bin"
     private var recordingFile: File? = null
     private lateinit var audioStatus: TextView
     private lateinit var recordAudioButton: Button
@@ -113,7 +115,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
         root.addView(input)
         val audioRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         recordAudioButton = Button(this).apply { text = "RECORD VOICE" }
-        val chooseAudio = Button(this).apply { text = "ATTACH AUDIO" }
+        val chooseAudio = Button(this).apply { text = "ATTACH FILE" }
         audioRow.addView(recordAudioButton, LinearLayout.LayoutParams(0, -2, 1f))
         audioRow.addView(chooseAudio, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(audioRow)
@@ -123,7 +125,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
         root.addView(previewAudioButton)
         discardAudioButton = Button(this).apply { text = "DISCARD VOICE"; isEnabled = false }
         root.addView(discardAudioButton)
-        val send = Button(this).apply { text = "SEND MESSAGE / VOICE" }
+        val send = Button(this).apply { text = "SEND MESSAGE / FILE" }
         root.addView(send)
         val airWaveToggle = CheckBox(this).apply {
             text = "Enable optional AirWave gesture"
@@ -167,7 +169,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
         chooseAudio.setOnClickListener {
             startActivityForResult(android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(android.content.Intent.CATEGORY_OPENABLE)
-                type = "audio/*"
+                type = "*/*"
             }, 73)
         }
         previewAudioButton.setOnClickListener { playPendingAudio() }
@@ -295,15 +297,18 @@ class MeshChatActivity : Activity(), SensorEventListener {
                 val reader = BufferedReader(InputStreamReader(connected.inputStream, Charsets.UTF_8))
                 while (true) {
                     val line = reader.readLine() ?: break
-                    if (line.startsWith("AUDIO|")) {
-                        val parts = line.split('|', limit = 3)
-                        if (parts.size == 3) {
-                            val safeName = parts[1].replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
-                            val bytes = android.util.Base64.decode(parts[2], android.util.Base64.DEFAULT)
-                            val dir = File(filesDir, "mesh_received").apply { mkdirs() }
-                            val received = File(dir, "${System.currentTimeMillis()}_$safeName")
-                            received.writeBytes(bytes)
-                            main.post { append("Peer sent audio: ${received.name} (${bytes.size / 1024} KB)") }
+                    if (line.startsWith("FILE|")) {
+                        val parts = line.split('|', limit = 4)
+                        if (parts.size == 4 && parts[3].length <= 21_000_000) {
+                            val mime = parts[1].take(120)
+                            val safeName = parts[2].replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
+                            val bytes = android.util.Base64.decode(parts[3], android.util.Base64.DEFAULT)
+                            if (bytes.size <= audioLimitBytes.toInt()) {
+                                val dir = File(filesDir, "mesh_received").apply { mkdirs() }
+                                val received = File(dir, "${System.currentTimeMillis()}_$safeName")
+                                received.writeBytes(bytes)
+                                main.post { append("Peer sent file: ${received.name} • $mime • ${bytes.size / 1024} KB") }
+                            }
                         }
                     } else {
                         val message = String(android.util.Base64.decode(line, android.util.Base64.DEFAULT), Charsets.UTF_8)
@@ -324,24 +329,26 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     private fun sendMessage() {
         val message = input.text.toString().trim()
-        if (message.isEmpty() && pendingAudioFile != null) { sendPendingAudio(); return }
-        if (message.isEmpty()) return
+        val attachment = pendingAudioFile
+        if (message.isEmpty() && attachment == null) return
         val out = writer
-        if (out == null || out.checkError()) {
-            status.text = "Not connected. Connect to a paired phone first."
-            return
-        }
-        val encoded = android.util.Base64.encodeToString(message.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        if (out == null || out.checkError()) { status.text = "Not connected. Connect to a paired phone first."; return }
+        if (attachment != null && attachment.length() !in 1..audioLimitBytes) { status.text = "Attachment must be between 1 byte and 15 MB."; return }
+        val encodedText = if (message.isNotEmpty()) android.util.Base64.encodeToString(message.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP) else null
+        val encodedFile = attachment?.let { android.util.Base64.encodeToString(it.readBytes(), android.util.Base64.NO_WRAP) }
+        val mime = pendingAttachmentMime
+        val fileName = pendingAttachmentName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
         thread(name = "vanta-mesh-send") {
-            out.println(encoded)
+            if (encodedText != null) out.println(encodedText)
+            if (encodedFile != null) out.println("FILE|$mime|$fileName|$encodedFile")
             main.post {
-                append("You: $message")
+                if (message.isNotEmpty()) append("You: $message")
                 input.setText("")
-                status.text = "Message sent over the local Bluetooth link."
+                if (attachment != null) { append("You sent file: $fileName"); attachment.delete(); if (pendingAudioFile == attachment) pendingAudioFile = null; audioStatus.text = "File sent"; previewAudioButton.isEnabled = false; discardAudioButton.isEnabled = false }
+                status.text = "Sent over the local Bluetooth link."
             }
         }
     }
-
 
     private fun startVoiceRecording() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -396,6 +403,7 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     private fun playPendingAudio() {
         val file = pendingAudioFile ?: return
+        if (!pendingAttachmentMime.startsWith("audio/")) { audioStatus.text = "Preview is only available for audio files."; return }
         try {
             val player = MediaPlayer()
             player.setDataSource(file.absolutePath)
@@ -433,13 +441,22 @@ class MeshChatActivity : Activity(), SensorEventListener {
         }
     }
 
+    private fun queryDisplayName(uri: android.net.Uri): String? {
+        contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) return cursor.getString(index)
+            }
+        }
+        return null
+    }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != 73 || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         val target = File(cacheDir, "vanta_audio_${System.currentTimeMillis()}.audio")
         try {
-            require(contentResolver.getType(uri).orEmpty().startsWith("audio/")) { "Choose an audio file." }
+            val mime = contentResolver.getType(uri) ?: "application/octet-stream"
             contentResolver.openInputStream(uri)?.use { source ->
                 FileOutputStream(target).use { sink ->
                     val buffer = ByteArray(8192)
@@ -456,7 +473,9 @@ class MeshChatActivity : Activity(), SensorEventListener {
             require(target.length() > 0) { "Selected file is empty." }
             pendingAudioFile?.delete()
             pendingAudioFile = target
-            audioStatus.text = "Audio attached • ${target.length() / 1024} KB"
+            pendingAttachmentMime = mime
+            pendingAttachmentName = queryDisplayName(uri) ?: "attachment_${Date.now()}"
+            audioStatus.text = "File attached: ${pendingAttachmentName} • ${target.length() / 1024} KB"
             previewAudioButton.isEnabled = true
             discardAudioButton.isEnabled = true
         } catch (error: Exception) {
