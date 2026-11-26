@@ -1,10 +1,13 @@
-name: Android debug build
+name: VANTA MESH Android CI
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/vanta-mesh-offline-chat, feature/vanta-airwave-gestures ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -18,10 +21,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Validate Android manifest XML
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse("app/src/main/AndroidManifest.xml")
+          print("Android manifest XML is valid.")
+          PY
+      - name: Run unit tests
+        run: gradle --no-daemon testDebugUnitTest
       - name: Assemble debug APK
-        run: gradle assembleDebug
+        run: gradle --no-daemon assembleDebug
+      - name: Verify debug APK
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          ls -lh "$APK"
+          file "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: vanta-debug-apk
+          name: vanta-mesh-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

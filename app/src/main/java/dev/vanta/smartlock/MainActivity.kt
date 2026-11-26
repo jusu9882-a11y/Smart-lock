@@ -1,181 +1,259 @@
 package dev.vanta.smartlock
 
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
-import android.content.Context
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.os.Build
-import androidx.fragment.app.FragmentActivity
-import androidx.activity.compose.setContent
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import android.view.Gravity
+import android.view.View
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 
-private val VoidBlack = Color(0xFF06090E)
-private val Cyan = Color(0xFF55D9FF)
-private val Muted = Color(0xFF8294AA)
+/**
+ * VANTA MESH home and section navigation.
+ * Transport and message operations remain in MeshChatActivity; this screen
+ * keeps the entry point clean and separates discovery, AirWave and settings.
+ */
+class MainActivity : Activity() {
+    private val ink = 0xFF07111C.toInt()
+    private val panel = 0xFF101E2C.toInt()
+    private val muted = 0xFF91A6BB.toInt()
+    private val cyan = 0xFF55D9FF.toInt()
+    private lateinit var pageHost: LinearLayout
+    private val pages = mutableMapOf<String, View>()
+    private val navButtons = mutableMapOf<String, Button>()
 
-class MainActivity : FragmentActivity() {
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun surface(color: Int, stroke: Int = 0xFF29445C.toInt(), radius: Int = 18) =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+            setStroke(dp(1), stroke)
+        }
+
+    private fun text(value: String, size: Float, color: Int = 0xFFE7F2FF.toInt(), bold: Boolean = false) =
+        TextView(this).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            if (bold) typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        }
+
+    private fun action(value: String, primary: Boolean = false, onClick: () -> Unit) =
+        Button(this).apply {
+            text = value
+            isAllCaps = false
+            textSize = 13f
+            minHeight = dp(50)
+            setTextColor(if (primary) ink else 0xFFDCEBFA.toInt())
+            background = surface(if (primary) cyan else 0xFF172A3B.toInt(),
+                if (primary) cyan else 0xFF31516B.toInt(), 15)
+            stateListAnimator = null
+            setOnClickListener { onClick() }
+        }
+
+    private fun card(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(16), dp(16), dp(16), dp(16))
+        background = surface(panel)
+    }
+
+    private fun addCard(parent: LinearLayout, title: String, description: String) {
+        val item = card()
+        item.addView(text(title, 16f, 0xFFEAF6FF.toInt(), true))
+        item.addView(text(description, 12f, muted).apply {
+            setLineSpacing(dp(3).toFloat(), 1f)
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        parent.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize(), color = VoidBlack) {
-                    VantaHome(
-                        authenticated = unlocked,
-                        onAuthenticate = { showAuthenticationPrompt() },
-                        onLockDevice = { lockDeviceNow() },
-                        onReLock = { unlocked = false },
-                        deviceAdminActive = isDeviceAdminActive()
-                    )
+        window.statusBarColor = ink
+        window.navigationBarColor = ink
+        window.decorView.systemUiVisibility = 0
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(18), dp(18), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF081421.toInt(), 0xFF05090F.toInt()))
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), dp(6), dp(4), dp(18))
+        }
+        header.addView(text("VANTA MESH", 23f, cyan, true))
+        header.addView(text("PRIVATE  •  OFFLINE  •  DEVICE TO DEVICE", 9f, muted).apply {
+            letterSpacing = 0.12f
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        root.addView(header)
+
+        pageHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(pageHost, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(5), dp(7), dp(5), dp(7))
+            background = surface(0xFF101D2A.toInt(), 0xFF233B50.toInt(), 20)
+        }
+        listOf("Chats" to "chats", "Connect" to "connect", "AirWave" to "airwave", "Settings" to "settings")
+            .forEach { (label, key) ->
+                val button = Button(this).apply {
+                    text = label
+                    isAllCaps = false
+                    textSize = 10f
+                    minHeight = dp(44)
+                    minWidth = 0
+                    setPadding(dp(2), dp(4), dp(2), dp(4))
+                    stateListAnimator = null
+                    setOnClickListener { showPage(key) }
                 }
+                navButtons[key] = button
+                nav.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+        root.addView(nav, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+
+        buildChatsPage()
+        buildConnectPage()
+        buildAirWavePage()
+        buildSettingsPage()
+        showPage("chats")
+        setContentView(root)
+    }
+
+    private fun page(key: String): LinearLayout {
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(2), 0, dp(4))
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            addView(column)
+        }
+        pages[key] = scroll
+        return column
+    }
+
+    private fun showPage(key: String) {
+        pageHost.removeAllViews()
+        pages[key]?.let { pageHost.addView(it, LinearLayout.LayoutParams(-1, -1)) }
+        navButtons.forEach { (name, button) ->
+            val selected = name == key
+            button.setTextColor(if (selected) cyan else muted)
+            button.background = if (selected) surface(0xFF1B3448.toInt(), 0xFF315D79.toInt(), 13)
+                else surface(0xFF101D2A.toInt(), 0xFF101D2A.toInt(), 13)
+        }
+    }
+
+    private fun buildChatsPage() {
+        val content = page("chats")
+        content.addView(text("Messages", 25f, 0xFFEAF6FF.toInt(), true))
+        content.addView(text("Your conversations", 12f, muted).apply {
+            setPadding(0, dp(4), 0, dp(18))
+        })
+        val conversation = card()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val avatar = TextView(this).apply {
+            text = "V"
+            textSize = 19f
+            gravity = Gravity.CENTER
+            setTextColor(ink)
+            background = surface(cyan, cyan, 40)
+        }
+        row.addView(avatar, LinearLayout.LayoutParams(dp(46), dp(46)))
+        val details = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), 0, 0, 0)
+        }
+        details.addView(text("VANTA MESH", 15f, 0xFFEAF6FF.toInt(), true))
+        details.addView(text("Offline device-to-device chat", 11f, muted).apply {
+            setPadding(0, dp(4), 0, 0)
+        })
+        row.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+        conversation.addView(row)
+        conversation.addView(action("OPEN MESSAGES", true) {
+            startActivity(Intent(this, MeshChatActivity::class.java).putExtra("initial_section", "chat"))
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
+        content.addView(conversation, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        addCard(content, "Designed for nearby devices",
+            "Send text, voice notes and files directly between phones. No account or mobile data is needed.")
+        addCard(content, "Your privacy stays local",
+            "VANTA MESH uses Bluetooth or Wi-Fi Direct for a direct local connection. Wi-Fi Direct does not provide town-to-town range.")
+    }
+
+    private fun buildConnectPage() {
+        val content = page("connect")
+        content.addView(text("Connections", 25f, 0xFFEAF6FF.toInt(), true))
+        content.addView(text("Choose how nearby phones connect.", 12f, muted).apply {
+            setPadding(0, dp(4), 0, dp(18))
+        })
+        addCard(content, "Bluetooth",
+            "Pair both phones in Android Bluetooth settings. VANTA can then discover and connect to the paired device.")
+        addCard(content, "Wi-Fi Direct",
+            "Create a local peer-to-peer Wi-Fi group or discover a nearby host. This is still offline and does not use an Internet connection.")
+        content.addView(action("OPEN CONNECTION MANAGER", true) {
+            startActivity(Intent(this, MeshChatActivity::class.java).putExtra("initial_section", "connect"))
+        }, LinearLayout.LayoutParams(-1, -2))
+    }
+
+    private fun buildAirWavePage() {
+        val content = page("airwave")
+        content.addView(text("AirWave", 25f, 0xFFEAF6FF.toInt(), true))
+        content.addView(text("Optional hands-free controls", 12f, muted).apply {
+            setPadding(0, dp(4), 0, dp(18))
+        })
+        val settings = getSharedPreferences("vanta_mesh", MODE_PRIVATE)
+        val toggleCard = card()
+        val toggle = CheckBox(this).apply {
+            text = "Enable AirWave"
+            textSize = 15f
+            setTextColor(0xFFEAF6FF.toInt())
+            buttonTintList = android.content.res.ColorStateList.valueOf(cyan)
+            isChecked = settings.getBoolean("airwave_enabled", false)
+            setOnCheckedChangeListener { _, enabled ->
+                settings.edit().putBoolean("airwave_enabled", enabled).apply()
             }
         }
+        toggleCard.addView(toggle)
+        toggleCard.addView(text("AirWave is off by default. When enabled, you must prepare a message or attachment and arm the send action before a gesture can transmit it.", 12f, muted).apply {
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(0, dp(8), 0, 0)
+        })
+        content.addView(toggleCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        addCard(content, "Phone-motion wave",
+            "Uses the phone's motion sensor to trigger a prepared send after you explicitly arm it.")
+        addCard(content, "Camera hand gestures",
+            "The optional camera mode supports making a fist to start voice recording, opening the hand to stop, and waving to send an armed item. Camera permission is requested only when you enable this mode.")
+        content.addView(action("CONFIGURE AIRWAVE IN CHAT") {
+            startActivity(Intent(this, MeshChatActivity::class.java).putExtra("initial_section", "airwave"))
+        }, LinearLayout.LayoutParams(-1, -2))
     }
 
-    private fun showAuthenticationPrompt() {
-        val biometricManager = BiometricManager.from(this)
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        if (biometricManager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
-            return
-        }
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock VANTA")
-            .setSubtitle("Authenticate using biometrics or your device credential")
-            .setAllowedAuthenticators(authenticators)
-            .build()
-        val prompt = BiometricPrompt(
-            this,
-            ContextCompat.getMainExecutor(this),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    unlocked = true
-                }
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    unlocked = false
-                }
-                override fun onAuthenticationFailed() {
-                    unlocked = false
-                }
-            }
-        )
-        prompt.authenticate(promptInfo)
-    }
-
-    private var unlocked by mutableStateOf(false)
-
-    private fun isDeviceAdminActive(): Boolean {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        return dpm.isAdminActive(ComponentName(this, VantaDeviceAdminReceiver::class.java))
-    }
-
-    private fun lockDeviceNow() {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val admin = ComponentName(this, VantaDeviceAdminReceiver::class.java)
-        if (dpm.isAdminActive(admin)) {
-            dpm.lockNow()
-        } else {
-            startActivity(android.content.Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
-                putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                    "Enable VANTA's explicit Lock Device button to lock using Android's system lock.")
-            })
-        }
-    }
-}
-
-@Composable
-private fun VantaHome(authenticated: Boolean, onAuthenticate: () -> Unit, onLockDevice: () -> Unit, onReLock: () -> Unit, deviceAdminActive: Boolean) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var time by remember { mutableStateOf("--:--") }
-    var date by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("SYSTEM AUTHENTICATION READY") }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val now = Date()
-            time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
-            date = SimpleDateFormat("EEE · dd MMM", Locale.getDefault()).format(now)
-                .uppercase(Locale.getDefault())
-            delay(1000)
-        }
-    }
-    val animation = rememberInfiniteTransition(label = "voidCore")
-    val pulse by animation.animateFloat(0.5f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "pulse")
-    val spin by animation.animateFloat(0f, 360f, infiniteRepeatable(tween(9000)), label = "spin")
-
-    Column(
-        Modifier.fillMaxSize().background(VoidBlack).padding(horizontal = 26.dp, vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("V A N T A  /  V O I D", color = Muted, fontSize = 12.sp, letterSpacing = 3.sp)
-            Spacer(Modifier.height(24.dp))
-            Text(time, color = Color.White, fontSize = 56.sp, letterSpacing = 1.sp)
-            Text(date, color = Muted, fontSize = 12.sp, letterSpacing = 2.sp)
-            Spacer(Modifier.height(8.dp))
-            Text("ANDROID AUTHENTICATION", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(240.dp), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.fillMaxSize()) {
-                    drawCircle(Cyan.copy(alpha = .10f * pulse), size.minDimension * .46f)
-                    drawCircle(Cyan.copy(alpha = .5f), size.minDimension * .43f, style = Stroke(1.dp.toPx()))
-                    rotate(spin) {
-                        drawArc(Cyan, 20f, 78f, false, style = Stroke(3.dp.toPx()))
-                        drawArc(Cyan.copy(alpha = .5f), 205f, 42f, false, style = Stroke(1.5.dp.toPx()))
-                    }
-                    drawCircle(Cyan.copy(alpha = .25f), size.minDimension * .34f, style = Stroke(1.dp.toPx()))
-                }
-                Box(Modifier.size(142.dp).border(2.dp, Cyan.copy(alpha = pulse), CircleShape)
-                    .background(Cyan.copy(alpha = .04f), CircleShape), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("VANTA", color = Cyan, fontSize = 22.sp, letterSpacing = 3.sp)
-                        Text("AUTH GATE", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
-                    }
-                }
-            }
-            Spacer(Modifier.height(18.dp))
-            Text(status, color = Cyan, fontSize = 12.sp, letterSpacing = 1.5.sp)
-            Spacer(Modifier.height(18.dp))
-            Button(onClick = if (authenticated) onReLock else onAuthenticate) { Text(if (authenticated) "LOCK VANTA" else "AUTHENTICATE") }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onLockDevice) { Text(if (deviceAdminActive) "LOCK DEVICE NOW" else "ENABLE SYSTEM LOCK") }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = { context.startActivity(android.content.Intent(context, MessageVaultActivity::class.java)) }) { Text("WHATSAPP MODE") }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = { context.startActivity(android.content.Intent(context, AppGuardActivity::class.java)) }) { Text("VOID APP GUARD") }
-            Spacer(Modifier.height(12.dp))
-            Text(if (authenticated) "VANTA session unlocked on this screen." else "Authentication opens Android's secure prompt.", color = Muted, fontSize = 10.sp)
-            Text("Device lock uses Android Device Administration.", color = Muted, fontSize = 10.sp)
-        }
-        Text("LOCAL ONLY  •  NO ADS  •  NO TELEMETRY", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
+    private fun buildSettingsPage() {
+        val content = page("settings")
+        content.addView(text("Settings", 25f, 0xFFEAF6FF.toInt(), true))
+        content.addView(text("VANTA MESH preferences and help", 12f, muted).apply {
+            setPadding(0, dp(4), 0, dp(18))
+        })
+        addCard(content, "Offline by design",
+            "Messages and attachments move directly over Bluetooth or Wi-Fi Direct. The app does not require mobile data or Internet service for device-to-device transfers.")
+        addCard(content, "Compatibility",
+            "VANTA MESH targets Android 9 and newer. Bluetooth, Wi-Fi Direct, microphone and camera availability depend on the phone and Android permissions.")
+        addCard(content, "Powered by JUSU tech team",
+            "VANTA MESH • Private offline messaging")
+        content.addView(action("OPEN HELP & CHAT") {
+            startActivity(Intent(this, MeshChatActivity::class.java))
+        }, LinearLayout.LayoutParams(-1, -2))
     }
 }

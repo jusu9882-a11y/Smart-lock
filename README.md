@@ -1,47 +1,57 @@
-# VANTA — Android Security Companion
+# VANTA MESH
 
-**Codename:** VOID · OLED black + electric cyan
+VANTA MESH is an Android-to-Android messaging app designed for direct offline communication. The app's user-facing entry point is the chat screen; the old lock, vault, and app-guard screens are no longer part of the launcher experience.
 
-VANTA is an Android security companion with Android's real biometric/device-credential prompt and an explicit Device Admin action to lock the phone. It is not a replacement for Android's lock screen.
+## Current implementation
 
-## Implemented in v0.5.0
-- AndroidX BiometricPrompt with device-credential fallback when supported.
-- Explicit Device Admin activation and **LOCK DEVICE NOW** using Android's `DevicePolicyManager.lockNow()`.
-- **WhatsApp Mode** using an Android `NotificationListenerService`.
-- Captures readable notification title/body previews from WhatsApp and WhatsApp Business only.
-- Stores up to 300 previews encrypted with AES-GCM using a key held by Android Keystore.
-- Screen to enable notification access and clear the WhatsApp archive.
-- Message Vault requires Android system authentication and automatically relocks when the activity is backgrounded; returning to the vault requires authentication again.
-- User-selected audio import through Android's system document picker; new imports are encrypted with AES-GCM using a separate Android Keystore key.
-- Audio playback decrypts into a temporary cache file and removes that file after playback or when the screen closes; users can delete imported audio.
-- 50 MB per-file import limit.
-- No network permission, advertising, or analytics.
+- Native dark chat interface with local and peer message bubbles.
+- Bluetooth Classic RFCOMM transport for paired Android phones.
+- Wi-Fi Direct transport for nearby Android phones, using a private group-owner socket. Bluetooth remains available.
+- Text messages, voice recording, and general file selection.
+- Incoming file storage in the app-private `filesDir/mesh_received` directory.
+- Optional AirWave phone-motion gesture to send the currently armed draft or attachment.
+- Encrypted, app-private message history using AES-GCM and Android Keystore, limited to the latest 500 text messages.
+- Local Android notifications for incoming messages/files while the chat activity remains alive in the background.
+- Built-in help screen and a splash screen displaying **Powered by JUSU tech team**.
+- No account, cloud server, mobile data, advertising, analytics, or public Internet service.
 
-## WhatsApp Mode: capabilities and limits
-- The user must explicitly enable Notification Access in Android Settings.
-- VANTA captures only WhatsApp notification content Android exposes after access is enabled.
-- If previews are hidden, disabled, grouped without readable text, or withheld, VANTA cannot save unavailable message text.
-- If a message is deleted after its readable preview was captured, the saved preview may remain. This is not guaranteed for every notification.
-- VANTA cannot inspect WhatsApp's private chat database, bypass end-to-end encryption, or recover messages that were never captured.
-- Notification access does not provide actual voice-note audio files or other media. VANTA supports manually importing audio files that the user can already access through Android's system file picker. It does not automatically extract audio from WhatsApp or restore deleted media.
+## Offline networking and permissions
 
-## Privacy and security
-- Notification access is a powerful Android special permission; grant it only if you understand the access.
-- Message previews are encrypted at rest using AES-GCM with a key stored in Android Keystore.
-- New audio imports are encrypted at rest using AES-GCM with a separate Android Keystore key. During playback, a temporary decrypted copy exists in the app cache and is deleted after playback or when the screen closes.
-- Audio files imported by older VANTA versions may remain unencrypted until the user deletes and imports them again. They are identified as **LEGACY FILE** in the list.
-- Clear the message archive or delete audio files from WhatsApp Mode to remove saved items. Removing app data also removes app-private files and the app's Keystore keys.
-- VANTA does not collect, store, or handle biometric templates, PINs, passwords, or pattern secrets.
-- The in-app authenticated state is an app UI gate only. It does not prevent leaving the app or replace Android's secure lock screen.
+Bluetooth uses Android's bonded-device RFCOMM connection. Wi-Fi Direct creates a local peer-to-peer group and opens a TCP socket only to the negotiated group-owner address.
+
+Android requires the `INTERNET` manifest permission for app TCP sockets, including local Wi-Fi Direct sockets. VANTA does not use this permission to contact public Internet hosts or remote servers. The Wi-Fi Direct transport is restricted in code to the negotiated local group-owner address.
+
+Wi-Fi Direct is local-range communication. It does not provide town-to-town messaging by itself. That would require network infrastructure or physical relays, neither of which is part of this offline-only design.
+
+## Gesture scope
+
+- Phone-motion AirWave is opt-in and requires the user to arm a prepared draft or attachment before a phone movement can send it.
+- Optional camera hand gestures run locally using a bundled MediaPipe hand-landmark model: make a fist to start voice recording, open the hand to stop, and wave an open hand to send an AirWave-armed item.
+- Camera use is off by default, requires explicit permission, shows a live preview, and processes frames in memory without saving them.
+- Touch recording and touch Send remain available when camera gestures are disabled.
+
+## Known limitations requiring verification or further work
+
+- Wi-Fi Direct and Bluetooth must be tested with two physical Android phones; CI cannot verify radio discovery, pairing, routing, or transfer.
+- Camera hand-pose recognition still requires physical testing for fist/open-hand/wave reliability across lighting, hand angles, and camera positions.
+- The current file protocol uses Base64 line frames with a 15 MB limit; it does not yet provide streaming, progress, resume, or integrity checks.
+- Received files are listed in the chat, audio files can be played in-app, and any received file can be exported through Android's system document picker.
+- Notifications are available only while the chat process/session remains alive. There is no always-on background messaging service or store-and-forward relay.
+- Chat history stores text only; attachment payloads and voice recordings are not persisted in the transcript.
+- Bluetooth and Wi-Fi Direct are local transports; there is no long-distance town-to-town mode without external network infrastructure.
+- Android OEM behavior, permission differences, battery restrictions, and screen-size adaptation require physical-device testing.
 
 ## Build
-The project uses Android Gradle Plugin 8.7.3 and Java 17. GitHub Actions builds a debug APK and uploads it as an artifact when a commit is pushed or manually triggered.
 
-## Next verification
-- [ ] CI build succeeds and APK artifact is available
-- [ ] Install and test on the target Android phone
-- [ ] Confirm Notification Access opt-in and WhatsApp-only incoming preview capture
-- [ ] Test hidden-preview, grouped-notification, and deleted-after-capture behavior
-- [ ] Test encrypted audio import, playback, deletion, and legacy-file handling
-- [ ] Accessibility, reduced-motion, and lock/re-auth lifecycle testing
-- [ ] Explore approved Device Owner / dedicated-device deployment separately; factory reset must never be attempted without backup and explicit approval
+The project uses Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compile SDK 35, Java 17, and supports Android 9 (API 28) or newer. MediaPipe Tasks requires API 28; Android 8 and older are not supported by this build. GitHub Actions validates the manifest, runs unit tests, builds a debug APK, verifies the APK file, and uploads it as an artifact.
+
+Run from the repository root:
+
+```sh
+gradle testDebugUnitTest
+gradle assembleDebug
+```
+
+First source build downloads and checksum-verifies the pinned hand model during `preBuild`; this is build-time network access only. The installed app uses the packaged model offline. See `docs/THIRD-PARTY-MODEL-NOTICE.md`.
+
+APK output: `app/build/outputs/apk/debug/app-debug.apk`.
