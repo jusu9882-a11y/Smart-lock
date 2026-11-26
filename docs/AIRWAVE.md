@@ -11,11 +11,11 @@ AirWave is an optional gesture shortcut for an already prepared VANTA MESH draft
 - The ordinary touch Send button remains available.
 - Touch-based voice recording remains available and is not dependent on camera access.
 
-## Not implemented
+## Optional camera hand gestures
 
-Phone motion sensors cannot reliably detect whether the user's fingers are curled into a fist. Camera-based fist/open-hand recognition is not implemented. Do not represent phone-wave detection as hand-pose recognition.
+The app includes an opt-in CameraX + MediaPipe hand-landmark path. A stable closed-fist pose starts voice recording; a stable open-hand pose stops it. A lateral open-hand wave sends only when AirWave is armed. The model is downloaded and checksum-verified during the build, then packaged in the APK; gesture inference has no runtime network dependency. The camera preview is visible while active, frames are processed in memory, and frames are not saved.
 
-A future camera implementation must be optional, on-device/offline, clearly indicate camera use, avoid saving frames, and use a packaged hand-pose model rather than a remote service.
+The landmark pose classifier is heuristic and has unit coverage for synthetic fist/open-hand landmarks. Real-world reliability still requires physical testing under varied lighting, hand angles, and camera positions. Touch recording and sending remain available.
 
 ## Safety and limits
 
