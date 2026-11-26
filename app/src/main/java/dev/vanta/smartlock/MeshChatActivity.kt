@@ -432,7 +432,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {\n            wifiTransport.discover()\n            status.text = "Nearby Wi-Fi permission granted."\n        } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+        if (requestCode == 42 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            wifiTransport.discover()
+            status.text = "Nearby Wi-Fi permission granted."
+        } else if (requestCode == 41 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             refreshPeers()
             status.text = "Bluetooth permissions granted. Pair devices in Android settings."
         } else status.text = "Bluetooth permissions are required for nearby chat."
@@ -518,7 +521,10 @@ class MeshChatActivity : Activity(), SensorEventListener {
                                 val dir = File(filesDir, "mesh_received").apply { mkdirs() }
                                 val received = File(dir, "${System.currentTimeMillis()}_$safeName")
                                 received.writeBytes(bytes)
-                                main.post {\n                                    append("Peer sent file: ${received.name} • $mime • ${bytes.size / 1024} KB")\n                                    if (!chatVisible) notifyIncoming("File received", received.name)\n                                }
+                                main.post {
+                                    append("Peer sent file: ${received.name} • $mime • ${bytes.size / 1024} KB")
+                                    if (!chatVisible) notifyIncoming("File received", received.name)
+                                }
                             }
                         }
                     } else if (line.startsWith("AUDIO|")) {
@@ -530,12 +536,18 @@ class MeshChatActivity : Activity(), SensorEventListener {
                                 val safeName = parts[1].replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
                                 val received = File(dir, "${System.currentTimeMillis()}_$safeName")
                                 received.writeBytes(bytes)
-                                main.post {\n                                    append("Peer sent voice note: ${received.name} • ${bytes.size / 1024} KB")\n                                    if (!chatVisible) notifyIncoming("Voice note received", received.name)\n                                }
+                                main.post {
+                                    append("Peer sent voice note: ${received.name} • ${bytes.size / 1024} KB")
+                                    if (!chatVisible) notifyIncoming("Voice note received", received.name)
+                                }
                             }
                         }
                     } else {
                         val message = String(android.util.Base64.decode(line, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                        main.post {\n                            append("Peer: $message")\n                            if (!chatVisible) notifyIncoming("New message", message)\n                        }
+                        main.post {
+                            append("Peer: $message")
+                            if (!chatVisible) notifyIncoming("New message", message)
+                        }
                     }
                 }
             } catch (error: Exception) {
