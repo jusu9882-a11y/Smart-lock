@@ -1,3 +1,6 @@
+import java.net.URL
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -49,7 +52,7 @@ val downloadHandLandmarkerModel by tasks.registering {
     inputs.property("modelSha256", handLandmarkerSha256)
     doLast {
         fun sha256(file: java.io.File): String =
-            java.security.MessageDigest.getInstance("SHA-256")
+            MessageDigest.getInstance("SHA-256")
                 .digest(file.readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
@@ -66,10 +69,9 @@ val downloadHandLandmarkerModel by tasks.registering {
         var lastFailure: Exception? = null
         for (source in sources) {
             try {
-                val connection = java.net.URL(source).openConnection().apply {
-                    connectTimeout = 20_000
-                    readTimeout = 120_000
-                }
+                val connection = URL(source).openConnection()
+                connection.connectTimeout = 20_000
+                connection.readTimeout = 120_000
                 connection.getInputStream().use { input ->
                     handLandmarkerModel.outputStream().use { output -> input.copyTo(output) }
                 }
